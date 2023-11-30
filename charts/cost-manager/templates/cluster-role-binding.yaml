@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cost-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cost-manager
+subjects:
+- kind: ServiceAccount
+  name: cost-manager
+  namespace: {{ .Release.Namespace }}

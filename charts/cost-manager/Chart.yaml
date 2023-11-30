@@ -1,0 +1,4 @@
+apiVersion: v2
+type: application
+name: cost-manager
+version: 0.1.0

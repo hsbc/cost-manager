@@ -1,0 +1,15 @@
+image:
+  pullPolicy: IfNotPresent
+  repository: docker.io/hsbc/cost-manager
+  tag: latest
+
+# Specify GCP Workload Identity service account email address bound to the
+# roles/compute.instanceAdmin role to allow instance deletion:
+# https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity 
+iam:
+  gcpServiceAccount: ""
+
+# Create VPA to vertically autoscale cost-manager:
+# https://cloud.google.com/kubernetes-engine/docs/concepts/verticalpodautoscaler
+vpa:
+  enabled: false

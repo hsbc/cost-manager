@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cost-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cost-manager
+  template:
+    metadata:
+      labels:
+        app: cost-manager
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccount: cost-manager
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: cost-manager
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
+          readOnlyRootFilesystem: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - all
+        # Mount the CA certificates directory from the host to trust the GCP API
+        volumeMounts:
+        - mountPath: /usr/local/share/ca-certificates
+          name: ca-certificates
+          readOnly: true
+      volumes:
+      - name: ca-certificates
+        hostPath:
+          path: /usr/share/ca-certificates

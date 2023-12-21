@@ -39,12 +39,3 @@ spec:
           capabilities:
             drop:
             - all
-        # Mount the CA certificates directory from the host to trust the GCP API
-        volumeMounts:
-        - mountPath: /usr/local/share/ca-certificates
-          name: ca-certificates
-          readOnly: true
-      volumes:
-      - name: ca-certificates
-        hostPath:
-          path: /usr/share/ca-certificates

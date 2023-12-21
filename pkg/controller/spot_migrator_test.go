@@ -73,7 +73,7 @@ func TestSpotMigratorNodeCreatedTrueOnNodeCreate(t *testing.T) {
 
 func TestSpotMigratorChooseNodeToDrainErrorOnEmptyList(t *testing.T) {
 	nodes := []*corev1.Node{}
-	_, err := chooseNodeToDrain(context.TODO(), nodes)
+	_, err := selectNodeForDeletion(context.TODO(), nodes)
 	require.NotNil(t, err)
 }
 
@@ -113,7 +113,7 @@ func TestSpotMigratorChooseNodeToDrainPreferOldest(t *testing.T) {
 			},
 		},
 	}
-	node, err := chooseNodeToDrain(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.TODO(), nodes)
 	require.Nil(t, err)
 	require.Equal(t, "oldest", node.Name)
 }
@@ -160,7 +160,7 @@ func TestSpotMigratorChooseNodeToDrainPreferNodesMarkedPreferNoScheduleByCluster
 			},
 		},
 	}
-	node, err := chooseNodeToDrain(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.TODO(), nodes)
 	require.Nil(t, err)
 	require.Equal(t, "secondoldest", node.Name)
 }
@@ -213,7 +213,7 @@ func TestSpotMigratorChooseNodeToDrainPreferNodesMarkedNoScheduleByClusterAutosc
 			},
 		},
 	}
-	node, err := chooseNodeToDrain(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.TODO(), nodes)
 	require.Nil(t, err)
 	require.Equal(t, "thirdoldest", node.Name)
 }
@@ -252,9 +252,51 @@ func TestSpotMigratorChooseNodeToDrainPreferUnschedulable(t *testing.T) {
 			},
 		},
 	}
-	node, err := chooseNodeToDrain(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.TODO(), nodes)
 	require.Nil(t, err)
 	require.True(t, node.Spec.Unschedulable)
+}
+
+func TestSpotMigratorChooseNodeToDrainPreferSelectedForDeletion(t *testing.T) {
+	nodes := []*corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				CreationTimestamp: metav1.Time{
+					Time: time.Now().Add(3 * time.Hour),
+				},
+			},
+			Spec: corev1.NodeSpec{
+				Unschedulable: true,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				CreationTimestamp: metav1.Time{
+					Time: time.Now().Add(2 * time.Hour),
+				},
+				Labels: map[string]string{
+					"cost-manager.io/selected-for-deletion": "true",
+				},
+			},
+			Spec: corev1.NodeSpec{
+				Unschedulable: false,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "oldest",
+				CreationTimestamp: metav1.Time{
+					Time: time.Now().Add(1 * time.Hour),
+				},
+			},
+			Spec: corev1.NodeSpec{
+				Unschedulable: false,
+			},
+		},
+	}
+	node, err := selectNodeForDeletion(context.TODO(), nodes)
+	require.Nil(t, err)
+	require.True(t, hasSelectedForDeletionLabel(node))
 }
 
 // TestCronSpecHasFixedActivationTimes ensures that the cron spec does not return activation times
@@ -305,54 +347,54 @@ func TestAnnotateNode(t *testing.T) {
 		},
 	}, metav1.CreateOptions{})
 	require.Nil(t, err)
-	err = sm.annotateNode(ctx, node.Name)
+	err = sm.addSelectedForDeletionLabel(ctx, node.Name)
 	require.Nil(t, err)
 	node, err = clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	require.Nil(t, err)
-	require.True(t, hasCordonedByAnnotation(node))
+	require.True(t, hasSelectedForDeletionLabel(node))
 }
 
-func TestHasCordonedByAnnotation(t *testing.T) {
+func TestHasSelectedForDeletionLabel(t *testing.T) {
 	tests := map[string]struct {
-		node                    *corev1.Node
-		hasCordonedByAnnotation bool
+		node                        *corev1.Node
+		hasSelectedForDeletionLabel bool
 	}{
-		"hasCordonedByAnnotation": {
+		"hasSelectedForDeletionLabel": {
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						"cost-manager.io/cordoned-by": "cost-manager-54cb55d5dc-f98ln",
+					Labels: map[string]string{
+						"cost-manager.io/selected-for-deletion": "true",
 					},
 				},
 			},
-			hasCordonedByAnnotation: true,
+			hasSelectedForDeletionLabel: true,
 		},
-		"hasAnotherAnnotation": {
+		"hasAnotherLabel": {
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
+					Labels: map[string]string{
 						"foo": "bar",
 					},
 				},
 			},
-			hasCordonedByAnnotation: false,
+			hasSelectedForDeletionLabel: false,
 		},
-		"hasNoAnnotations": {
+		"hasNoLabels": {
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{},
+					Labels: map[string]string{},
 				}},
-			hasCordonedByAnnotation: false,
+			hasSelectedForDeletionLabel: false,
 		},
-		"missingAnnotations": {
-			node:                    &corev1.Node{},
-			hasCordonedByAnnotation: false,
+		"missingLabels": {
+			node:                        &corev1.Node{},
+			hasSelectedForDeletionLabel: false,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			hasCordonedByAnnotation := hasCordonedByAnnotation(test.node)
-			require.Equal(t, test.hasCordonedByAnnotation, hasCordonedByAnnotation)
+			hasSelectedForDeletionLabel := hasSelectedForDeletionLabel(test.node)
+			require.Equal(t, test.hasSelectedForDeletionLabel, hasSelectedForDeletionLabel)
 		})
 	}
 }

@@ -1,8 +1,7 @@
-package drain
+package kubernetes
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"time"
 
@@ -10,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiwatch "k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/watch"
 	"k8s.io/kubectl/pkg/drain"
@@ -19,8 +18,7 @@ import (
 const (
 	// We match our Node drain timeout with GKE:
 	// https://cloud.google.com/kubernetes-engine/docs/concepts/node-pools#drain
-	nodeDrainTimeout    = time.Hour
-	nodeDeletionTimeout = 10 * time.Minute
+	nodeDrainTimeout = time.Hour
 )
 
 // We use the default drain implementation:
@@ -52,22 +50,7 @@ func DrainNode(ctx context.Context, clientset kubernetes.Interface, node *corev1
 	return nil
 }
 
-func WaitForNodeToBeDeletedWithTimeout(ctx context.Context, clientset kubernetes.Interface, nodeName string) error {
-	ctx, cancel := context.WithTimeout(ctx, nodeDeletionTimeout)
-	defer cancel()
-	result := make(chan error, 1)
-	go func() {
-		result <- waitForNodeToBeDeleted(ctx, clientset, nodeName)
-	}()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case result := <-result:
-		return result
-	}
-}
-
-func waitForNodeToBeDeleted(ctx context.Context, clientset kubernetes.Interface, nodeName string) error {
+func WaitForNodeToBeDeleted(ctx context.Context, clientset kubernetes.Interface, nodeName string) error {
 	nodeList, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
@@ -92,16 +75,9 @@ func waitForNodeToBeDeleted(ctx context.Context, clientset kubernetes.Interface,
 		},
 	}
 	condition := func(event apiwatch.Event) (bool, error) {
-		if event.Type == apiwatch.Error {
-			// Attempt to cast to *metav1.Status
-			if status, ok := event.Object.(*metav1.Status); ok {
-				return false, fmt.Errorf("watch failed with error: %s", status.Message)
-			}
-			return false, fmt.Errorf("watch failed with error: %+v", event.Object)
-		}
-		node, ok := event.Object.(*corev1.Node)
-		if !ok {
-			return false, errors.New("failed to type assert runtime object to *corev1.Node")
+		node, err := parseWatchEventObject[*corev1.Node](event)
+		if err != nil {
+			return false, err
 		}
 		if event.Type == apiwatch.Deleted {
 			if node.Name == nodeName {

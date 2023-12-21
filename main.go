@@ -4,9 +4,9 @@ import (
 	"os"
 
 	"github.com/hsbc/cost-manager/pkg/controller"
+	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/hsbc/cost-manager/pkg/logging"
-	"github.com/hsbc/cost-manager/pkg/scheme"
-	"k8s.io/client-go/kubernetes"
+	clientgo "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -16,7 +16,7 @@ import (
 
 func main() {
 	// Create new scheme
-	scheme, err := scheme.NewScheme()
+	scheme, err := kubernetes.NewScheme()
 	if err != nil {
 		logging.Logger.Error(err, "failed to create new scheme")
 		os.Exit(1)
@@ -38,7 +38,7 @@ func main() {
 	}
 	// Disable client-side rate-limiting: https://github.com/kubernetes/kubernetes/issues/111880
 	restConfig.QPS = -1
-	clientset, err := kubernetes.NewForConfig(restConfig)
+	clientset, err := clientgo.NewForConfig(restConfig)
 	if err != nil {
 		logging.Logger.Error(err, "failed to create clientset")
 		os.Exit(1)

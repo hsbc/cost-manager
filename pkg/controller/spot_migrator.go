@@ -3,14 +3,13 @@ package controller
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"time"
 
-	"github.com/hsbc/cost-manager/pkg/domain"
-	"github.com/hsbc/cost-manager/pkg/drain"
-	"github.com/hsbc/cost-manager/pkg/gcp"
 	"github.com/go-logr/logr"
+	"github.com/hsbc/cost-manager/pkg/domain"
+	"github.com/hsbc/cost-manager/pkg/gcp"
+	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -19,7 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
+	clientgo "k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -40,8 +39,8 @@ var (
 		Name: "cost_manager_spot_migrator_operation_success_total",
 		Help: "The total number of successful spot-migrator operations",
 	})
-	// Annotation to add to Nodes before draining to allow them to be identified if restarted
-	nodeCordonedByAnnotationKey = fmt.Sprintf("%s/%s", domain.Name, "cordoned-by")
+	// Label to add to Nodes before draining to allow them to be identified if we are restarted
+	nodeSelectedForDeletionLabelKey = fmt.Sprintf("%s/%s", domain.Name, "selected-for-deletion")
 )
 
 // spot-migrator periodically drains on-demand Nodes in an attempt to migrate workloads to spot
@@ -50,25 +49,25 @@ var (
 // cost of spot Nodes:
 // https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-autoscaler#operating_criteria
 type SpotMigrator struct {
-	Clientset kubernetes.Interface
+	Clientset clientgo.Interface
 	Logger    logr.Logger
 }
 
 var _ manager.Runnable = &SpotMigrator{}
 
-// Start starts the spot-migrator and blocks until the context is cancelled
+// Start starts spot-migrator and blocks until the context is cancelled
 func (sm *SpotMigrator) Start(ctx context.Context) error {
 	// Register Prometheus metrics
 	metrics.Registry.MustRegister(spotMigratorOperationSuccessTotal)
 
-	// If spot-migrator drains itself it will leave an unschedulable Node in the cluster so we begin
-	// by draining all unschedulable on-demand Nodes that have been annotated
+	// If spot-migrator drains itself it will leave an undrained Node in the cluster so we begin by
+	// draining Nodes that have been previously selected for deletion
 	onDemandNodes, err := sm.listOnDemandNodes(ctx)
 	if err != nil {
 		return err
 	}
 	for _, onDemandNode := range onDemandNodes {
-		if onDemandNode.Spec.Unschedulable && hasCordonedByAnnotation(onDemandNode) {
+		if hasSelectedForDeletionLabel(onDemandNode) {
 			err = sm.drainAndDeleteNode(ctx, onDemandNode)
 			if err != nil {
 				return err
@@ -105,6 +104,13 @@ func (sm *SpotMigrator) Start(ctx context.Context) error {
 
 func (sm *SpotMigrator) run(ctx context.Context) error {
 	for {
+		// If the context has been cancelled then return instead of continuing with the migration
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
 		// List on-demand Nodes before draining
 		beforeDrainOnDemandNodes, err := sm.listOnDemandNodes(ctx)
 		if err != nil {
@@ -118,21 +124,23 @@ func (sm *SpotMigrator) run(ctx context.Context) error {
 			return nil
 		}
 
-		// Drain one of the on-demand Nodes
-		onDemandNode, err := chooseNodeToDrain(ctx, beforeDrainOnDemandNodes)
-		if err != nil {
-			return err
-		}
-		err = sm.drainAndDeleteNode(ctx, onDemandNode)
+		// Select one of the on-demand Nodes to delete
+		onDemandNode, err := selectNodeForDeletion(ctx, beforeDrainOnDemandNodes)
 		if err != nil {
 			return err
 		}
 
-		// If the context has been cancelled then return instead of continuing with the migration
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
+		// Just before we drain and delete the Node we label it. If we happen to drain ourself this
+		// will allow us to identify the Node again and continue after rescheduling
+		err = sm.addSelectedForDeletionLabel(ctx, onDemandNode.Name)
+		if err != nil {
+			return err
+		}
+
+		// Drain and delete Node
+		err = sm.drainAndDeleteNode(ctx, onDemandNode)
+		if err != nil {
+			return err
 		}
 
 		// List on-demand Nodes after draining
@@ -194,7 +202,7 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 		return err
 	}
 
-	// Retrieve the compute instance corresponding to Node
+	// Retrieve the compute instance corresponding to the Node
 	instance, err := computeService.Instances.Get(project, zone, node.Name).Do()
 	if err != nil {
 		return fmt.Errorf("failed to find compute instance corresponding to Node %s", node.Name)
@@ -206,23 +214,24 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 		return err
 	}
 
-	// Before we cordon and drain the Node we annotate it. If we happen to drain ourself this will
-	// allow us to identify the Node again and continue draining after restarting
-	err = sm.annotateNode(ctx, node.Name)
-	if err != nil {
-		return err
-	}
-
 	logger.Info("Draining Node")
-	err = drain.DrainNode(ctx, sm.Clientset, node)
+	err = kubernetes.DrainNode(ctx, sm.Clientset, node)
 	if err != nil {
 		return err
 	}
 	logger.Info("Drained Node successfully")
 
+	// Drain connections from GCP load balancers
+	logger.Info("Draining external load balancer connections")
+	err = gcp.DrainExternalLoadBalancerConnections(ctx, sm.Clientset, computeService, node, project, zone, instance.SelfLink)
+	if err != nil {
+		return err
+	}
+	logger.Info("Drained external load balancer connections successfully")
+
 	// Delete instance from managed instance group
 	logger.Info("Deleting managed instance")
-	err = gcp.DeleteInstanceFromManagedInstanceGroup(ctx, computeService, project, zone, managedInstanceGroupName, fmt.Sprintf("zones/%s/instances/%s", zone, instance.Name))
+	err = gcp.DeleteInstanceFromManagedInstanceGroup(ctx, computeService, project, zone, managedInstanceGroupName, instance.SelfLink)
 	if err != nil {
 		return err
 	}
@@ -230,7 +239,7 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 
 	// Wait for Node to be removed from the Kubernetes API server
 	logger.Info("Waiting for Node to be deleted")
-	err = drain.WaitForNodeToBeDeletedWithTimeout(ctx, sm.Clientset, node.Name)
+	err = kubernetes.WaitForNodeToBeDeleted(ctx, sm.Clientset, node.Name)
 	if err != nil {
 		return errors.Wrapf(err, "failed to wait for Node %s to be deleted", node.Name)
 	}
@@ -242,27 +251,32 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 	return nil
 }
 
-func (sm *SpotMigrator) annotateNode(ctx context.Context, nodeName string) error {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, nodeCordonedByAnnotationKey, hostname))
-	_, err = sm.Clientset.CoreV1().Nodes().Patch(ctx, nodeName, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+func (sm *SpotMigrator) addSelectedForDeletionLabel(ctx context.Context, nodeName string) error {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"true"}}}`, nodeSelectedForDeletionLabelKey))
+	_, err := sm.Clientset.CoreV1().Nodes().Patch(ctx, nodeName, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// chooseNodeToDrain attempts the find the best Node to drain using the following algorithm:
-// 1. If there are any unschedulable Nodes then return the oldest
-// 2. Otherwise if there are any schedulable Nodes marked for deletion by the cluster-autoscaler then return the oldest
-// 3. Otherwise return the oldest schedulable Node
-func chooseNodeToDrain(ctx context.Context, nodes []*corev1.Node) (*corev1.Node, error) {
-	// There should always be at least 1 Node to choose from
+func hasSelectedForDeletionLabel(node *corev1.Node) bool {
+	if node.Labels == nil {
+		return false
+	}
+	_, ok := node.Labels[nodeSelectedForDeletionLabelKey]
+	return ok
+}
+
+// selectNodeForDeletion attempts the find the best Node to delete using the following algorithm:
+// 1. If there are any Nodes that have previously been selected for deletion then return the oldest
+// 2. Otherwise if there are any unschedulable Nodes then return the oldest
+// 3. Otherwise if there are any schedulable Nodes marked for deletion by the cluster-autoscaler then return the oldest
+// 4. Otherwise return the oldest schedulable Node
+func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.Node, error) {
+	// There should always be at least 1 Node to select from
 	if len(nodes) == 0 {
-		return nil, errors.New("failed to choose Node from empty list")
+		return nil, errors.New("failed to select Node from empty list")
 	}
 
 	// Sort the Nodes in the order in which they were created
@@ -271,6 +285,13 @@ func chooseNodeToDrain(ctx context.Context, nodes []*corev1.Node) (*corev1.Node,
 		jTime := nodes[j].CreationTimestamp.Time
 		return iTime.Before(jTime)
 	})
+
+	// If any Nodes have previously been selected for deletion then return the first one
+	for _, node := range nodes {
+		if hasSelectedForDeletionLabel(node) {
+			return node, nil
+		}
+	}
 
 	// If any Nodes are unschedulable then return the first one; this reduces the chance of having
 	// more than one unschedulable Node at any one time
@@ -321,12 +342,4 @@ func nodeCreated(beforeNodes, afterNodes []*corev1.Node) bool {
 		}
 	}
 	return false
-}
-
-func hasCordonedByAnnotation(node *corev1.Node) bool {
-	if node.Annotations == nil {
-		return false
-	}
-	_, ok := node.Annotations[nodeCordonedByAnnotationKey]
-	return ok
 }

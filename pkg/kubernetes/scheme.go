@@ -1,4 +1,4 @@
-package scheme
+package kubernetes
 
 import (
 	"github.com/pkg/errors"

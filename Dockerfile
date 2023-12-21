@@ -14,7 +14,7 @@ RUN test -z "$(gofmt -l .)"
 RUN go test -race ./...
 
 # Build static cost-manager binary
-RUN CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o /go/bin/cost-manager
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags netgo -ldflags="-s -w" -o /go/bin/cost-manager
 
 FROM gcr.io/distroless/static-debian12:nonroot
 

@@ -8,4 +8,7 @@ run: build
 	./bin/cost-manager
 
 image:
-	docker build -t cost-manager .
+	docker buildx build \
+		-t cost-manager \
+		--platform linux/amd64 \
+		.

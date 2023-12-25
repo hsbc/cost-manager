@@ -23,7 +23,7 @@ func TestGetManagedInstanceGroupFromInstance(t *testing.T) {
 			},
 		},
 	}
-	managedInstanceGroupName, err := GetManagedInstanceGroupFromInstance(instance)
+	managedInstanceGroupName, err := getManagedInstanceGroupFromInstance(instance)
 	require.Nil(t, err)
 	require.Equal(t, "my-managed-instance-group", managedInstanceGroupName)
 }

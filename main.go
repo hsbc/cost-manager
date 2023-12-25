@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/hsbc/cost-manager/pkg/cloudprovider/gcp"
 	"github.com/hsbc/cost-manager/pkg/controller"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/hsbc/cost-manager/pkg/logging"
@@ -44,10 +45,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create context
+	ctx := signals.SetupSignalHandler()
+
+	// Once we support cloud providers other than GCP we can make this configurable
+	cloudProvider, err := gcp.NewCloudProvider(ctx)
+	if err != nil {
+		logging.Logger.Error(err, "failed to create cloud provider")
+		os.Exit(1)
+	}
+
 	// Setup spot-migrator
 	if err := mgr.Add(&controller.SpotMigrator{
-		Clientset: clientset,
-		Logger:    logging.Logger.WithValues("controller", "spot-migrator"),
+		Logger:        logging.Logger.WithValues("controller", "spot-migrator"),
+		Clientset:     clientset,
+		CloudProvider: cloudProvider,
 	}); err != nil {
 		logging.Logger.Error(err, "failed to setup spot-migrator")
 		os.Exit(1)
@@ -55,7 +67,7 @@ func main() {
 
 	// Start controller manager
 	logging.Logger.Info("Starting controller manager")
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		logging.Logger.Error(err, "failed to start controller manager")
 		os.Exit(1)
 	}

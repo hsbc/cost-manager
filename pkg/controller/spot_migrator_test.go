@@ -398,3 +398,31 @@ func TestHasSelectedForDeletionLabel(t *testing.T) {
 		})
 	}
 }
+
+func TestExcludeNodeFromExternalLoadBalancing(t *testing.T) {
+	ctx := context.Background()
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "test"}}
+	sm := &SpotMigrator{
+		Clientset: fake.NewSimpleClientset(node),
+	}
+
+	err := sm.excludeNodeFromExternalLoadBalancing(ctx, node)
+	require.Nil(t, err)
+
+	node, err = sm.Clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
+	require.Nil(t, err)
+
+	// Verify that the cluster autoscaler taint was added
+	hasToBeDeletedTaint := false
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == "ToBeDeletedByClusterAutoscaler" && taint.Effect == "NoSchedule" {
+			hasToBeDeletedTaint = true
+			break
+		}
+	}
+	require.True(t, hasToBeDeletedTaint)
+
+	// Verify that the exclusion label was added
+	_, ok := node.Labels["node.kubernetes.io/exclude-from-external-load-balancers"]
+	require.True(t, ok)
+}

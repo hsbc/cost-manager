@@ -7,18 +7,18 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/hsbc/cost-manager/pkg/cloudprovider"
 	"github.com/hsbc/cost-manager/pkg/domain"
-	"github.com/hsbc/cost-manager/pkg/gcp"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"google.golang.org/api/compute/v1"
 	"gopkg.in/robfig/cron.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientgo "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -32,6 +32,9 @@ const (
 	cronSpec = "@hourly"
 	// https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms#scheduling-workloads
 	onDemandNodeLabelSelector = "cloud.google.com/gke-spot!=true"
+
+	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L39-L40
+	toBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
 )
 
 var (
@@ -49,8 +52,9 @@ var (
 // cost of spot Nodes:
 // https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-autoscaler#operating_criteria
 type SpotMigrator struct {
-	Clientset clientgo.Interface
-	Logger    logr.Logger
+	Logger        logr.Logger
+	Clientset     clientgo.Interface
+	CloudProvider cloudprovider.CloudProvider
 }
 
 var _ manager.Runnable = &SpotMigrator{}
@@ -174,74 +178,41 @@ func (sm *SpotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Node) error {
 	logger := sm.Logger.WithValues("node", node.Name)
 
-	// Retrieve instance details from the provider ID
-	project, zone, instanceName, err := gcp.ParseProviderID(node.Spec.ProviderID)
-	if err != nil {
-		return err
-	}
-
-	// Validate that the provider ID details match with the Node. This should not be necessary but
-	// it helps avoid deleting the wrong instance if there is a bug in our logic
-	if instanceName != node.Name {
-		return fmt.Errorf("provider ID instance name \"%s\" does not match with Node name \"%s\"", instanceName, node.Name)
-	}
-	if node.Labels == nil {
-		return fmt.Errorf("failed to determine zone for Node %s", node.Name)
-	}
-	nodeZone, ok := node.Labels[corev1.LabelTopologyZone]
-	if !ok {
-		return fmt.Errorf("failed to determine zone for Node %s", node.Name)
-	}
-	if zone != nodeZone {
-		return fmt.Errorf("provider ID zone \"%s\" does not match with Node zone \"%s\"", zone, nodeZone)
-	}
-
-	// Create compute service for interacting with GCP compute API
-	computeService, err := compute.NewService(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Retrieve the compute instance corresponding to the Node
-	instance, err := computeService.Instances.Get(project, zone, node.Name).Do()
-	if err != nil {
-		return fmt.Errorf("failed to find compute instance corresponding to Node %s", node.Name)
-	}
-
-	// Determine the managed instance group that created the instance
-	managedInstanceGroupName, err := gcp.GetManagedInstanceGroupFromInstance(instance)
-	if err != nil {
-		return err
-	}
-
 	logger.Info("Draining Node")
-	err = kubernetes.DrainNode(ctx, sm.Clientset, node)
+	err := kubernetes.DrainNode(ctx, sm.Clientset, node)
 	if err != nil {
 		return err
 	}
 	logger.Info("Drained Node successfully")
 
-	// Drain connections from GCP load balancers
+	logger.Info("Excluding Node from external load balancing")
+	err = sm.excludeNodeFromExternalLoadBalancing(ctx, node)
+	if err != nil {
+		return err
+	}
+	logger.Info("Node excluded from external load balancing successfully")
+
 	logger.Info("Draining external load balancer connections")
-	err = gcp.DrainExternalLoadBalancerConnections(ctx, sm.Clientset, computeService, node, project, zone, instance.SelfLink)
+	err = sm.CloudProvider.DrainExternalLoadBalancerConnections(ctx, node)
 	if err != nil {
 		return err
 	}
 	logger.Info("Drained external load balancer connections successfully")
 
-	// Delete instance from managed instance group
-	logger.Info("Deleting managed instance")
-	err = gcp.DeleteInstanceFromManagedInstanceGroup(ctx, computeService, project, zone, managedInstanceGroupName, instance.SelfLink)
+	logger.Info("Deleting machine")
+	err = sm.CloudProvider.DeleteMachine(ctx, node)
 	if err != nil {
 		return err
 	}
-	logger.Info("Managed instance deleted successfully")
+	logger.Info("Machine deleted successfully")
 
-	// Wait for Node to be removed from the Kubernetes API server
+	// Since the underlying machine has been deleted we expect the Node object to be deleted from
+	// the Kubernetes API server by the node controller:
+	// https://kubernetes.io/docs/concepts/architecture/cloud-controller/#node-controller
 	logger.Info("Waiting for Node to be deleted")
 	err = kubernetes.WaitForNodeToBeDeleted(ctx, sm.Clientset, node.Name)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for Node %s to be deleted", node.Name)
+		return err
 	}
 	logger.Info("Node deleted")
 
@@ -257,6 +228,60 @@ func (sm *SpotMigrator) addSelectedForDeletionLabel(ctx context.Context, nodeNam
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (sm *SpotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context, node *corev1.Node) error {
+	// Adding the cluster autoscaler taint will tell the KCCM service controller to exclude the Node
+	// from load balancing. This may or may not trigger connection draining depending on provider:
+	// https://github.com/kubernetes/kubernetes/blob/b5ba7bc4f5f49760c821cae2f152a8000922e72e/staging/src/k8s.io/cloud-provider/controllers/service/controller.go#L1043-L1051
+	// Once KEP-3836 has been implemented the cluster autoscaler taint will start failing the
+	// kube-proxy health check to trigger proper connection draining:
+	// https://github.com/kubernetes/enhancements/tree/27ef0d9a740ae5058472aac4763483f0e7218c0e/keps/sig-network/3836-kube-proxy-improved-ingress-connectivity-reliability
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		node, err := sm.Clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		hasToBeDeletedTaint := false
+		for _, taint := range node.Spec.Taints {
+			if taint.Key == toBeDeletedTaint {
+				hasToBeDeletedTaint = true
+				break
+			}
+		}
+		if !hasToBeDeletedTaint {
+			// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L166-L174
+			node.Spec.Taints = append(node.Spec.Taints, corev1.Taint{
+				Key:    toBeDeletedTaint,
+				Value:  fmt.Sprint(time.Now().Unix()),
+				Effect: corev1.TaintEffectNoSchedule,
+			})
+			_, err := sm.Clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// We also add the node.kubernetes.io/exclude-from-external-load-balancers label since this
+	// triggers instant KCCM service controller reconciliation instead of having to wait for the
+	// Node sync period:
+	// https://kubernetes.io/docs/reference/labels-annotations-taints/#node-kubernetes-io-exclude-from-external-load-balancers
+	// https://github.com/kubernetes/kubernetes/blob/b5ba7bc4f5f49760c821cae2f152a8000922e72e/staging/src/k8s.io/cloud-provider/controllers/service/controller.go#L699-L712
+	// https://github.com/kubernetes/kubernetes/blob/b5ba7bc4f5f49760c821cae2f152a8000922e72e/staging/src/k8s.io/cloud-provider/controllers/service/controller.go#L54-L55
+	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"true"}}}`, corev1.LabelNodeExcludeBalancers))
+	_, err = sm.Clientset.CoreV1().Nodes().Patch(ctx, node.Name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "failed to label Node %s", node.Name)
+	}
+
 	return nil
 }
 

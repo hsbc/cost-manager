@@ -1,13 +1,31 @@
 # cost-manager
 
-cost-manager is a collection of Kubernetes controllers that helps to reduce the costs of the
-Kubernetes cluster it is running on. Currently it is specific to GKE:
+cost-manager is a collection of Kubernetes
+[controllers](https://kubernetes.io/docs/concepts/architecture/controller/) that automate cost
+reductions for the cluster they are running on.
 
-- [spot-migrator](./pkg/controller/spot_migrator.go): Periodically attempts to migrate workloads
-  from on-demand VMs to [spot VMs](https://cloud.google.com/compute/docs/instances/spot). It does
-  this by draining on-demand Nodes to force cluster scale up and relying on the fact that the
-  cluster autoscaler [attempts to expand the least expensive possible node
-  pool](https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-autoscaler#operating_criteria)
+## Controllers
+
+Here we provide details of the various controllers and how they work.
+
+### spot-migrator
+
+Spot VMs are unused compute capacity that many cloud providers support access to at significantly
+reduced costs (e.g. on GCP spot VMs provide a [60-91%
+discount](https://cloud.google.com/compute/docs/instances/spot#pricing)). Since spot VM availability
+can fluctuate it is common to configure workloads to be able to run on spot VMs but to make this a
+soft requirement to allow fallback to on-demand VMs if necessary. However, even if spot VMs are
+available, if workloads are already running on on-demand VMs there is no reason for them to migrate.
+
+[spot-migrator](./pkg/controller/spot_migrator.go) periodically attempts to migrate workloads from
+on-demand VMs to spot VMs by draining on-demand Nodes to force cluster scale up and relying on the
+fact that the cluster autoscaler [attempts to expand the least expensive possible node
+group](https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md).
+
+Currently only [GKE
+Standard](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clusters) clusters are
+supported. To allow spot-migrator to migrate workloads to spot VMs with fallback to on-demand VMs
+your cluster must be running at least one on-demand node pool and at least on spot node pool.
 
 ## Quickstart
 

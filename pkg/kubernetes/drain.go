@@ -56,7 +56,7 @@ func WaitForNodeToBeDeleted(ctx context.Context, clientset kubernetes.Interface,
 		return err
 	}
 
-	// Determine whether Node has already been deleted
+	// Determine whether the Node has already been deleted
 	nodeIsNotFound := true
 	for _, node := range nodeList.Items {
 		if node.Name == nodeName {
@@ -68,7 +68,7 @@ func WaitForNodeToBeDeleted(ctx context.Context, clientset kubernetes.Interface,
 		return nil
 	}
 
-	// Wait for Node to be deleted
+	// Wait for the Node to be deleted
 	watcher := &cache.ListWatch{
 		WatchFunc: func(options metav1.ListOptions) (apiwatch.Interface, error) {
 			return clientset.CoreV1().Nodes().Watch(ctx, options)

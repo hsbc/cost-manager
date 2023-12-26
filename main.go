@@ -11,9 +11,15 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
+
+func init() {
+	log.SetLogger(zap.New())
+}
 
 func main() {
 	// Create new scheme
@@ -57,7 +63,6 @@ func main() {
 
 	// Setup spot-migrator
 	if err := mgr.Add(&controller.SpotMigrator{
-		Logger:        logging.Logger.WithValues("controller", "spot-migrator"),
 		Clientset:     clientset,
 		CloudProvider: cloudProvider,
 	}); err != nil {

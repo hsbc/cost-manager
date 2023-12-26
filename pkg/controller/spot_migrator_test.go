@@ -296,7 +296,7 @@ func TestSpotMigratorChooseNodeToDrainPreferSelectedForDeletion(t *testing.T) {
 	}
 	node, err := selectNodeForDeletion(context.TODO(), nodes)
 	require.Nil(t, err)
-	require.True(t, hasSelectedForDeletionLabel(node))
+	require.True(t, isSelectedForDeletion(node))
 }
 
 // TestCronSpecHasFixedActivationTimes ensures that the cron spec does not return activation times
@@ -351,15 +351,15 @@ func TestAnnotateNode(t *testing.T) {
 	require.Nil(t, err)
 	node, err = clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	require.Nil(t, err)
-	require.True(t, hasSelectedForDeletionLabel(node))
+	require.True(t, isSelectedForDeletion(node))
 }
 
-func TestHasSelectedForDeletionLabel(t *testing.T) {
+func TestIsSelectedForDeletion(t *testing.T) {
 	tests := map[string]struct {
-		node                        *corev1.Node
-		hasSelectedForDeletionLabel bool
+		node                  *corev1.Node
+		isSelectedForDeletion bool
 	}{
-		"hasSelectedForDeletionLabel": {
+		"hasSelectedForDeletionLabelTrue": {
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -367,7 +367,17 @@ func TestHasSelectedForDeletionLabel(t *testing.T) {
 					},
 				},
 			},
-			hasSelectedForDeletionLabel: true,
+			isSelectedForDeletion: true,
+		},
+		"hasSelectedForDeletionLabelFalse": {
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"cost-manager.io/selected-for-deletion": "false",
+					},
+				},
+			},
+			isSelectedForDeletion: false,
 		},
 		"hasAnotherLabel": {
 			node: &corev1.Node{
@@ -377,24 +387,24 @@ func TestHasSelectedForDeletionLabel(t *testing.T) {
 					},
 				},
 			},
-			hasSelectedForDeletionLabel: false,
+			isSelectedForDeletion: false,
 		},
 		"hasNoLabels": {
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{},
 				}},
-			hasSelectedForDeletionLabel: false,
+			isSelectedForDeletion: false,
 		},
 		"missingLabels": {
-			node:                        &corev1.Node{},
-			hasSelectedForDeletionLabel: false,
+			node:                  &corev1.Node{},
+			isSelectedForDeletion: false,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			hasSelectedForDeletionLabel := hasSelectedForDeletionLabel(test.node)
-			require.Equal(t, test.hasSelectedForDeletionLabel, hasSelectedForDeletionLabel)
+			isSelectedForDeletion := isSelectedForDeletion(test.node)
+			require.Equal(t, test.isSelectedForDeletion, isSelectedForDeletion)
 		})
 	}
 }

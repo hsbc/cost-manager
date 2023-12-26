@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/hsbc/cost-manager/pkg/cloudprovider"
 	"github.com/hsbc/cost-manager/pkg/domain"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
@@ -19,11 +18,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 const (
+	spotMigratorControllerName = "spot-migrator"
 	// Running spot migration hourly seems like a good tradeoff between cluster stability and
 	// reactivity to spot availability. Note that this will schedule on the hour rather than
 	// relative to the current time; this ensures that spot migration still has a good chance of
@@ -35,6 +36,8 @@ const (
 
 	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L39-L40
 	toBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
+	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L41-L42
+	deletionCandidateTaint = "DeletionCandidateOfClusterAutoscaler"
 )
 
 var (
@@ -52,7 +55,6 @@ var (
 // cost of spot Nodes:
 // https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-autoscaler#operating_criteria
 type SpotMigrator struct {
-	Logger        logr.Logger
 	Clientset     clientgo.Interface
 	CloudProvider cloudprovider.CloudProvider
 }
@@ -61,17 +63,20 @@ var _ manager.Runnable = &SpotMigrator{}
 
 // Start starts spot-migrator and blocks until the context is cancelled
 func (sm *SpotMigrator) Start(ctx context.Context) error {
+	logger := log.FromContext(ctx).WithName(spotMigratorControllerName)
+	ctx = log.IntoContext(ctx, logger)
+
 	// Register Prometheus metrics
 	metrics.Registry.MustRegister(spotMigratorOperationSuccessTotal)
 
-	// If spot-migrator drains itself it will leave an undrained Node in the cluster so we begin by
-	// draining Nodes that have been previously selected for deletion
+	// If spot-migrator drains itself then any ongoing migration operations will be cancelled so we
+	// begin by draining and deleting any Nodes that have previously been selected for deletion
 	onDemandNodes, err := sm.listOnDemandNodes(ctx)
 	if err != nil {
 		return err
 	}
 	for _, onDemandNode := range onDemandNodes {
-		if hasSelectedForDeletionLabel(onDemandNode) {
+		if isSelectedForDeletion(onDemandNode) {
 			err = sm.drainAndDeleteNode(ctx, onDemandNode)
 			if err != nil {
 				return err
@@ -90,7 +95,7 @@ func (sm *SpotMigrator) Start(ctx context.Context) error {
 		now := time.Now()
 		nextSchedule := cronSchedule.Next(now)
 		sleepDuration := nextSchedule.Sub(now)
-		sm.Logger.WithValues("sleepDuration", sleepDuration.String()).Info("Waiting before next spot migration")
+		logger.WithValues("sleepDuration", sleepDuration.String()).Info("Waiting before next spot migration")
 		select {
 		case <-time.After(sleepDuration):
 		case <-ctx.Done():
@@ -101,12 +106,13 @@ func (sm *SpotMigrator) Start(ctx context.Context) error {
 		if err != nil {
 			// We do not return the error to make sure other cost-manager processes/controllers
 			// continue to run; we rely on Prometheus metrics to alert us to failures
-			sm.Logger.Error(err, "Failed to run spot migration")
+			logger.Error(err, "Failed to run spot migration")
 		}
 	}
 }
 
 func (sm *SpotMigrator) run(ctx context.Context) error {
+	logger := log.FromContext(ctx)
 	for {
 		// If the context has been cancelled then return instead of continuing with the migration
 		select {
@@ -154,9 +160,9 @@ func (sm *SpotMigrator) run(ctx context.Context) error {
 		}
 
 		// If any on-demand Nodes were created while draining then we assume that there are no more
-		// spot Nodes available and that spot migration is complete
+		// spot VMs available and that spot migration is complete
 		if nodeCreated(beforeDrainOnDemandNodes, afterDrainOnDemandNodes) {
-			sm.Logger.Info("Node was created while draining")
+			logger.Info("Node was created while draining")
 			return nil
 		}
 	}
@@ -176,7 +182,7 @@ func (sm *SpotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 
 // drainNode drains the specified Node and deletes the underlying instance
 func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Node) error {
-	logger := sm.Logger.WithValues("node", node.Name)
+	logger := log.FromContext(ctx, "node", node.Name)
 
 	logger.Info("Draining Node")
 	err := kubernetes.DrainNode(ctx, sm.Clientset, node)
@@ -229,6 +235,14 @@ func (sm *SpotMigrator) addSelectedForDeletionLabel(ctx context.Context, nodeNam
 		return err
 	}
 	return nil
+}
+
+func isSelectedForDeletion(node *corev1.Node) bool {
+	if node.Labels == nil {
+		return false
+	}
+	value, ok := node.Labels[nodeSelectedForDeletionLabelKey]
+	return ok && value == "true"
 }
 
 func (sm *SpotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context, node *corev1.Node) error {
@@ -285,14 +299,6 @@ func (sm *SpotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context
 	return nil
 }
 
-func hasSelectedForDeletionLabel(node *corev1.Node) bool {
-	if node.Labels == nil {
-		return false
-	}
-	_, ok := node.Labels[nodeSelectedForDeletionLabelKey]
-	return ok
-}
-
 // selectNodeForDeletion attempts the find the best Node to delete using the following algorithm:
 // 1. If there are any Nodes that have previously been selected for deletion then return the oldest
 // 2. Otherwise if there are any unschedulable Nodes then return the oldest
@@ -313,7 +319,7 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 
 	// If any Nodes have previously been selected for deletion then return the first one
 	for _, node := range nodes {
-		if hasSelectedForDeletionLabel(node) {
+		if isSelectedForDeletion(node) {
 			return node, nil
 		}
 	}
@@ -331,7 +337,7 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 	for _, node := range nodes {
 		for _, taint := range node.Spec.Taints {
 			// https://github.com/kubernetes/autoscaler/blob/299c9637229fb2bf849c1d86243fe2948d14101e/cluster-autoscaler/utils/taints/taints.go#L119
-			if taint.Key == "ToBeDeletedByClusterAutoscaler" && taint.Effect == corev1.TaintEffectNoSchedule {
+			if taint.Key == toBeDeletedTaint && taint.Effect == corev1.TaintEffectNoSchedule {
 				return node, nil
 			}
 		}
@@ -342,7 +348,7 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 	for _, node := range nodes {
 		for _, taint := range node.Spec.Taints {
 			// https://github.com/kubernetes/autoscaler/blob/299c9637229fb2bf849c1d86243fe2948d14101e/cluster-autoscaler/utils/taints/taints.go#L124
-			if taint.Key == "DeletionCandidateOfClusterAutoscaler" && taint.Effect == corev1.TaintEffectPreferNoSchedule {
+			if taint.Key == deletionCandidateTaint && taint.Effect == corev1.TaintEffectPreferNoSchedule {
 				return node, nil
 			}
 		}

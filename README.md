@@ -24,10 +24,10 @@ expensive possible node
 group](https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md).
 If an on-demand VM is added to the cluster then spot-migrator assumes that there are currently no
 more spot VMs available and waits for the next migration attempt (currently every hour) however if
-no on-demand VMs are added then spot-migrator continues to drain on-demand VMs until there are no
-more on-demand VMs left in the cluster (and all workloads are running on spot VMs). Node draining
-respects [Pod Disruption Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/)
-to ensure that workloads are migrated whilst maintaining desired levels of availability.
+no on-demand VMs were added then spot-migrator continues to drain on-demand VMs until there are no
+more left in the cluster (and all workloads are running on spot VMs). Node draining respects [Pod
+Disruption Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/) to ensure that
+workloads are migrated whilst maintaining desired levels of availability.
 
 Currently only [GKE
 Standard](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clusters) clusters are

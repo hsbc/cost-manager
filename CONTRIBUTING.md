@@ -1,4 +1,4 @@
-# Contributing Guidelines
+# Contributing
 
 ## Logging
 

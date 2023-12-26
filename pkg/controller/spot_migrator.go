@@ -31,8 +31,6 @@ const (
 	// running even if cost-manager is being restarted regularly:
 	// https://pkg.go.dev/github.com/robfig/cron#hdr-Predefined_schedules
 	cronSpec = "@hourly"
-	// https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms#scheduling-workloads
-	onDemandNodeLabelSelector = "cloud.google.com/gke-spot!=true"
 
 	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L39-L40
 	toBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
@@ -168,14 +166,21 @@ func (sm *SpotMigrator) run(ctx context.Context) error {
 	}
 }
 
+// listOnDemandNodes lists all Nodes that are not backed by a spot instance
 func (sm *SpotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, error) {
-	onDemandNodes := []*corev1.Node{}
-	onDemandNodeList, err := sm.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: onDemandNodeLabelSelector})
+	nodeList, err := sm.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return onDemandNodes, err
+		return nil, err
 	}
-	for _, node := range onDemandNodeList.Items {
-		onDemandNodes = append(onDemandNodes, node.DeepCopy())
+	onDemandNodes := []*corev1.Node{}
+	for _, node := range nodeList.Items {
+		isSpotInstance, err := sm.CloudProvider.IsSpotInstance(ctx, &node)
+		if err != nil {
+			return onDemandNodes, err
+		}
+		if !isSpotInstance {
+			onDemandNodes = append(onDemandNodes, node.DeepCopy())
+		}
 	}
 	return onDemandNodes, nil
 }
@@ -198,21 +203,14 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 	}
 	logger.Info("Node excluded from external load balancing successfully")
 
-	logger.Info("Draining external load balancer connections")
-	err = sm.CloudProvider.DrainExternalLoadBalancerConnections(ctx, node)
+	logger.Info("Deleting instance")
+	err = sm.CloudProvider.DeleteInstance(ctx, node)
 	if err != nil {
 		return err
 	}
-	logger.Info("Drained external load balancer connections successfully")
+	logger.Info("Instance deleted successfully")
 
-	logger.Info("Deleting machine")
-	err = sm.CloudProvider.DeleteMachine(ctx, node)
-	if err != nil {
-		return err
-	}
-	logger.Info("Machine deleted successfully")
-
-	// Since the underlying machine has been deleted we expect the Node object to be deleted from
+	// Since the underlying instance has been deleted we expect the Node object to be deleted from
 	// the Kubernetes API server by the node controller:
 	// https://kubernetes.io/docs/concepts/architecture/cloud-controller/#node-controller
 	logger.Info("Waiting for Node to be deleted")

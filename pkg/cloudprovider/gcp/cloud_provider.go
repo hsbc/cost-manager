@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,10 @@ import (
 )
 
 const (
+	// https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms#scheduling-workloads
+	spotVMLabelKey   = "cloud.google.com/gke-spot"
+	spotVMLabelValue = "true"
+
 	// After kube-proxy starts failing its health check GCP load balancers should mark the instance
 	// as unhealthy within 24 seconds but we wait for slightly longer to give in-flight connections
 	// time to complete before we delete the underlying instance:
@@ -36,12 +41,35 @@ func NewCloudProvider(ctx context.Context) (*CloudProvider, error) {
 	}, nil
 }
 
-// DrainExternalLoadBalancerConnections drains connections from GCP load balancers
-func (gcp *CloudProvider) DrainExternalLoadBalancerConnections(ctx context.Context, node *corev1.Node) error {
-	// Retrieve the compute instance corresponding to the Node
-	project, zone, instance, err := gcp.getInstanceFromNode(node)
+// DeleteInstance retrieves the underlying compute instance of the Kubernetes Node, drains any
+// connections from GCP load balancers and then deletes it from its managed instance group
+func (gcp *CloudProvider) DeleteInstance(ctx context.Context, node *corev1.Node) error {
+	// Retrieve instance details from the provider ID
+	project, zone, instanceName, err := parseProviderID(node.Spec.ProviderID)
 	if err != nil {
 		return err
+	}
+
+	// Validate that the provider ID details match with the Node. This should not be necessary but
+	// it provides an extra level of validation that we are retrieving the expected instance
+	if instanceName != node.Name {
+		return fmt.Errorf("provider ID instance name \"%s\" does not match with Node name \"%s\"", instanceName, node.Name)
+	}
+	if node.Labels == nil {
+		return fmt.Errorf("failed to determine zone for Node %s", node.Name)
+	}
+	nodeZone, ok := node.Labels[corev1.LabelTopologyZone]
+	if !ok {
+		return fmt.Errorf("failed to determine zone for Node %s", node.Name)
+	}
+	if zone != nodeZone {
+		return fmt.Errorf("provider ID zone \"%s\" does not match with Node zone \"%s\"", zone, nodeZone)
+	}
+
+	// Retrieve the compute instance corresponding to the Node
+	instance, err := gcp.computeService.Instances.Get(project, zone, instanceName).Do()
+	if err != nil {
+		return errors.Wrapf(err, "failed to get compute instance: %s/%s/%s", project, zone, instanceName)
 	}
 
 	// Until KEP-3836 has been released we explicitly remove the instance from any instance groups
@@ -133,18 +161,6 @@ func (gcp *CloudProvider) DrainExternalLoadBalancerConnections(ctx context.Conte
 		break
 	}
 
-	return nil
-}
-
-// DeleteMachine determines the underlying instance of the Kubernetes Node and deletes it from its
-// managed instance group
-func (gcp *CloudProvider) DeleteMachine(ctx context.Context, node *corev1.Node) error {
-	// Retrieve the compute instance corresponding to the Node
-	project, zone, instance, err := gcp.getInstanceFromNode(node)
-	if err != nil {
-		return err
-	}
-
 	// Determine the managed instance group that created the instance
 	managedInstanceGroupName, err := getManagedInstanceGroupFromInstance(instance)
 	if err != nil {
@@ -169,5 +185,18 @@ func (gcp *CloudProvider) DeleteMachine(ctx context.Context, node *corev1.Node) 
 	if err != nil {
 		return errors.Wrap(err, "failed to wait for managed instance group stability")
 	}
+
 	return nil
+}
+
+// IsSpotInstance determines whether the underlying compute instance is a spot VM
+func (gcp *CloudProvider) IsSpotInstance(ctx context.Context, node *corev1.Node) (bool, error) {
+	if node.Labels == nil {
+		return false, nil
+	}
+	value, ok := node.Labels[spotVMLabelKey]
+	if !ok {
+		return false, nil
+	}
+	return value == spotVMLabelValue, nil
 }

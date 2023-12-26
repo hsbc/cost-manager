@@ -17,18 +17,22 @@ can fluctuate it is common to configure workloads to be able to run on spot VMs 
 fallback to on-demand VMs if spot VMs are unavailable. However, even if spot VMs are available, if
 workloads are already running on on-demand VMs there is no reason for them to migrate.
 
-[spot-migrator](./pkg/controller/spot_migrator.go) periodically attempts to migrate workloads from
-on-demand VMs to spot VMs by draining on-demand Nodes to force cluster scale up and relying on the
-fact that the cluster autoscaler [attempts to expand the least expensive possible node
+To improve spot VM utilisation, [spot-migrator](./pkg/controller/spot_migrator.go) periodically
+attempts to migrate workloads from on-demand VMs to spot VMs by draining on-demand Nodes to force
+cluster scale up and relying on the fact that the cluster autoscaler [attempts to expand the least
+expensive possible node
 group](https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md).
-Currently migration will be attempted every hour, respecting [Pod Disruption
-Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/) to ensure that workloads
-are migrated whilst maintaining desired levels of availability.
+If an on-demand VM is added to the cluster then spot-migrator assumes that there are currently no
+more spot VMs available and waits for the next migration attempt (currently every hour) however if
+no on-demand VMs are added then spot-migrator continues to drain on-demand VMs until there are no
+more on-demand VMs left in the cluster (and all workloads are running on spot VMs). Node draining
+respects [Pod Disruption Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/)
+to ensure that workloads are migrated whilst maintaining desired levels of availability.
 
 Currently only [GKE
 Standard](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clusters) clusters are
 supported. To allow spot-migrator to migrate workloads to spot VMs with fallback to on-demand VMs
-your cluster must be running at least one on-demand node pool and at least on spot node pool.
+your cluster must be running at least one on-demand node pool and at least one spot node pool.
 
 ## Quickstart
 

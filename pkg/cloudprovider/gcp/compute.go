@@ -6,45 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"google.golang.org/api/compute/v1"
-	corev1 "k8s.io/api/core/v1"
 )
 
 const (
 	operationPollInterval = 10 * time.Second
 )
-
-func (gcp *CloudProvider) getInstanceFromNode(node *corev1.Node) (string, string, *compute.Instance, error) {
-	// Retrieve instance details from the provider ID
-	project, zone, instanceName, err := parseProviderID(node.Spec.ProviderID)
-	if err != nil {
-		return "", "", nil, err
-	}
-
-	// Validate that the provider ID details match with the Node. This should not be necessary but
-	// it provides an extra level of validation that we are retrieving the expected instance
-	if instanceName != node.Name {
-		return "", "", nil, fmt.Errorf("provider ID instance name \"%s\" does not match with Node name \"%s\"", instanceName, node.Name)
-	}
-	if node.Labels == nil {
-		return "", "", nil, fmt.Errorf("failed to determine zone for Node %s", node.Name)
-	}
-	nodeZone, ok := node.Labels[corev1.LabelTopologyZone]
-	if !ok {
-		return "", "", nil, fmt.Errorf("failed to determine zone for Node %s", node.Name)
-	}
-	if zone != nodeZone {
-		return "", "", nil, fmt.Errorf("provider ID zone \"%s\" does not match with Node zone \"%s\"", zone, nodeZone)
-	}
-
-	// Retrieve the compute instance corresponding to the Node
-	instance, err := gcp.computeService.Instances.Get(project, zone, instanceName).Do()
-	if err != nil {
-		return "", "", nil, errors.Wrapf(err, "failed to get compute instance: %s/%s/%s", project, zone, instanceName)
-	}
-	return project, zone, instance, nil
-}
 
 // getManagedInstanceGroupFromInstance determines the managed instance group that created the
 // instance; instances created by managed instance groups should have a metadata label with key

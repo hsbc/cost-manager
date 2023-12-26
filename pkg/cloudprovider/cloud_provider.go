@@ -8,9 +8,13 @@ import (
 
 // CloudProvider contains the functions for interacting with a cloud provider
 type CloudProvider interface {
-	// DrainExternalLoadBalancerConnections drains connections from external load balancers to a
-	// Kubernetes Node to allow it to be safely deleted
-	DrainExternalLoadBalancerConnections(ctx context.Context, node *corev1.Node) error
-	// DeleteMachine deletes the underlying machine of a Node
-	DeleteMachine(ctx context.Context, node *corev1.Node) error
+	// IsSpotInstance determines whether the underlying instance of the Node is a spot instance
+	IsSpotInstance(ctx context.Context, node *corev1.Node) (bool, error)
+	// DeleteInstance should drain connections from external load balancers to the Node and then
+	// delete the underlying instance. Implementations can assume that before this function is
+	// called the Node has already been modified to ensure that the KCCM service controller will
+	// eventually remove the Node from load balancing although this process may still be in progress
+	// when this function is called:
+	// https://kubernetes.io/docs/concepts/architecture/cloud-controller/#service-controller
+	DeleteInstance(ctx context.Context, node *corev1.Node) error
 }

@@ -36,3 +36,8 @@ helm template ./charts/cost-manager \
     --set iam.gcpServiceAccount="$GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS" \
     --set vpa.enabled=true | kubectl apply -f -
 ```
+
+## Contributing
+
+Contributions are greatly appreciated. The project follows the typical GitHub pull request model.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.

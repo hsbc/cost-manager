@@ -21,7 +21,7 @@ jobs:
         set -euo pipefail
 
         # https://github.com/github/docs/issues/15319#issuecomment-1662257301
-        echo TAG="${{ github.event.pull_request && github.head_ref || github.ref_name }}"
+        TAG="${{ github.event.pull_request && github.head_ref || github.ref_name }}"
         if [ "$TAG" = "main" ]; then
           TAG=latest
         fi

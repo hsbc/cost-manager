@@ -5,10 +5,12 @@ import (
 	"testing"
 	"time"
 
+	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/robfig/cron.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -435,4 +437,87 @@ func TestExcludeNodeFromExternalLoadBalancing(t *testing.T) {
 	// Verify that the exclusion label was added
 	_, ok := node.Labels["node.kubernetes.io/exclude-from-external-load-balancers"]
 	require.True(t, ok)
+}
+
+func TestListOnDemandNodes(t *testing.T) {
+	tests := map[string]struct {
+		nodes         []*corev1.Node
+		onDemandNodes []*corev1.Node
+	}{
+		"noNodes": {
+			nodes:         []*corev1.Node{},
+			onDemandNodes: []*corev1.Node{},
+		},
+		"oneSpotNode": {
+			nodes: []*corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+						Labels: map[string]string{
+							cloudproviderfake.SpotInstanceLabelKey: cloudproviderfake.SpotInstanceLabelValue,
+						},
+					},
+				},
+			},
+			onDemandNodes: []*corev1.Node{},
+		},
+		"oneOnDemandNode": {
+			nodes: []*corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				},
+			},
+			onDemandNodes: []*corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				},
+			},
+		},
+		"multipleNodes": {
+			nodes: []*corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "foo",
+						Labels: map[string]string{
+							cloudproviderfake.SpotInstanceLabelKey: cloudproviderfake.SpotInstanceLabelValue,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "bar",
+					},
+				},
+			},
+			onDemandNodes: []*corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "bar",
+					},
+				},
+			},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+
+			var objects []runtime.Object
+			for _, node := range test.nodes {
+				objects = append(objects, node)
+			}
+			sm := &SpotMigrator{
+				Clientset:     fake.NewSimpleClientset(objects...),
+				CloudProvider: &cloudproviderfake.CloudProvider{},
+			}
+
+			onDemandNodes, err := sm.listOnDemandNodes(ctx)
+			require.Nil(t, err)
+			require.Equal(t, test.onDemandNodes, onDemandNodes)
+		})
+	}
 }

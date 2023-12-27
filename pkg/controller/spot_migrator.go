@@ -25,6 +25,7 @@ import (
 
 const (
 	spotMigratorControllerName = "spot-migrator"
+
 	// Running spot migration hourly seems like a good tradeoff between cluster stability and
 	// reactivity to spot availability. Note that this will schedule on the hour rather than
 	// relative to the current time; this ensures that spot migration still has a good chance of
@@ -43,15 +44,16 @@ var (
 		Name: "cost_manager_spot_migrator_operation_success_total",
 		Help: "The total number of successful spot-migrator operations",
 	})
+
 	// Label to add to Nodes before draining to allow them to be identified if we are restarted
 	nodeSelectedForDeletionLabelKey = fmt.Sprintf("%s/%s", domain.Name, "selected-for-deletion")
 )
 
-// spot-migrator periodically drains on-demand Nodes in an attempt to migrate workloads to spot
+// SpotMigrator periodically drains on-demand Nodes in an attempt to migrate workloads to spot
 // Nodes; this works because draining Nodes will eventually trigger cluster scale up and the cluster
 // autoscaler attempts to scale up the least expensive node pool, taking into account the reduced
 // cost of spot Nodes:
-// https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-autoscaler#operating_criteria
+// https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md
 type SpotMigrator struct {
 	Clientset     clientgo.Interface
 	CloudProvider cloudprovider.CloudProvider

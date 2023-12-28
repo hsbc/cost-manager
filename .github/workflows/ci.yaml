@@ -2,7 +2,26 @@
 name: ci
 on: push
 jobs:
+  test:
+    # if: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64
+        push: false
   build:
+    # Only build Docker image for repository PRs since it requires Docker Hub credentials:
+    # https://github.com/orgs/community/discussions/25217#discussioncomment-3246902
+    # if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
     - name: Checkout

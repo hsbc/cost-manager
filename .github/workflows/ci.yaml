@@ -16,20 +16,14 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Generate tag
-      run: |
-        set -euo pipefail
-
-        # https://github.com/github/docs/issues/15319#issuecomment-1662257301
-        TAG="${{ github.event.pull_request && github.head_ref || github.ref_name }}"
-        if [ "$TAG" = "main" ]; then
-          TAG=latest
-        fi
-        echo "TAG=$TAG" >> "$GITHUB_ENV"
     - name: Build and push
       uses: docker/build-push-action@v5
+      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+      env:
+        # https://github.com/github/docs/issues/15319#issuecomment-1662257301
+        BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
       with:
         context: .
         platforms: linux/amd64
         push: true
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.TAG }}
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}

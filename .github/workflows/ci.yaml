@@ -14,9 +14,9 @@ jobs:
     - name: Download dependencies
       run: go mod download
     - name: Test
-      run: go test -race ./...
+      run: make test
     - name: Build
-      run: CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o ./bin/cost-manager
+      run: make build
     - name: Upload binary
       uses: actions/upload-artifact@v3
       with:

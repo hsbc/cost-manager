@@ -1,7 +1,7 @@
 test:
-	go test ./...
+	go test -race ./...
 
-build: test
+build:
 	CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o ./bin/cost-manager
 
 run: build

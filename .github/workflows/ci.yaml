@@ -63,9 +63,9 @@ jobs:
         platforms: linux/amd64
         push: true
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
-        # https://docs.docker.com/build/ci/github-actions/cache/#registry-cache
-        cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:buildcache
-        cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:buildcache,mode=max
+        # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
   kind:
     needs: build
     runs-on: ubuntu-latest

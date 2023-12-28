@@ -66,3 +66,20 @@ jobs:
         # https://docs.docker.com/build/ci/github-actions/cache/#registry-cache
         cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:buildcache
         cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:buildcache,mode=max
+  kind:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: azure/setup-helm@v3
+      with:
+        version: v3.12.1
+    - run: |
+        helm lint --strict ./charts/cost-manager
+    - uses: helm/kind-action@v1.8.0
+    - run: |
+        kubectl create namespace cost-manager
+        helm template ./charts/cost-manager \
+          -n cost-manager \
+          --set iam.gcp.serviceAccount=cost-manager@example.iam.gserviceaccount.com \
+          --set vpa.enabled=true | kubectl apply -f -

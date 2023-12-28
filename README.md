@@ -36,6 +36,10 @@ your cluster must be running at least one on-demand node pool and at least one s
 
 ## Quickstart
 
+When using spot-migrator on GCP, cost-manager requires the
+[roles/compute.instanceAdmin](https://cloud.google.com/iam/docs/understanding-roles#compute.instanceAdmin)
+role to delete compute instances from GKE managed instance groups.
+
 cost-manager can be run locally:
 
 ```sh
@@ -44,21 +48,16 @@ cost-manager can be run locally:
 make run
 ```
 
-Alternatively, you can run cost-manager within a Kubernetes cluster:
+Alternatively, you can run cost-manager within a GKE Kubernetes cluster with [Workload
+Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) enabled:
 
 ```sh
-# Build the Docker image
-make image
-REPOSITORY=""
-docker tag cost-manager "$REPOSITORY"
-docker push "$REPOSITORY"
 # GCP service account bound to the roles/compute.instanceAdmin role
 GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS="cost-manager@example.iam.gserviceaccount.com"
 kubectl create namespace cost-manager --dry-run=client -o yaml | kubectl apply -f
 helm template ./charts/cost-manager \
     -n cost-manager \
-    --set image.repository="$REPOSITORY" \
-    --set iam.gcpServiceAccount="$GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS" \
+    --set iam.gcp.serviceAccount="$GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS" \
     --set vpa.enabled=true | kubectl apply -f -
 ```
 

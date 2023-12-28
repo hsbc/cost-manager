@@ -27,6 +27,8 @@ jobs:
     # Do not build Docker images for forked repositories since Docker Hub secrets are not available:
     # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
     if: ${{ ! github.event.pull_request.head.repo.fork }}
+    # Make sure the tests have passed before building
+    needs: test
     runs-on: ubuntu-latest
     steps:
     - name: Checkout

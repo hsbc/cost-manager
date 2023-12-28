@@ -217,7 +217,7 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 	// the Kubernetes API server by the node controller:
 	// https://kubernetes.io/docs/concepts/architecture/cloud-controller/#node-controller
 	logger.Info("Waiting for Node object to be deleted")
-	err = kubernetes.WaitForNodeToBeDeleted(ctx, sm.Clientset, node.Name)
+	kubernetes.WaitForNodeToBeDeleted(ctx, sm.Clientset, node.Name)
 	if err != nil {
 		return err
 	}

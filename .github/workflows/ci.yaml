@@ -60,7 +60,7 @@ jobs:
         BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
       with:
         context: .
-        platforms: linux/amd64,linux/arm64
+        platforms: linux/amd64
         push: true
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         # https://docs.docker.com/build/ci/github-actions/cache/#registry-cache

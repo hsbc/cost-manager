@@ -2,13 +2,10 @@ test:
 	go test ./...
 
 build: test
-	go build -o ./bin/cost-manager
+	CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o ./bin/cost-manager
 
 run: build
 	./bin/cost-manager
 
-image:
-	docker buildx build \
-		-t cost-manager \
-		--platform linux/amd64 \
-		.
+image: build
+	docker build -t cost-manager .

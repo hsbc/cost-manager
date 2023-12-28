@@ -17,12 +17,12 @@ jobs:
     - name: Test
       run: go test -race ./...
     - name: Build
-      run: CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o cost-manager
+      run: CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o ./bin/cost-manager
     - name: Upload binary
       uses: actions/upload-artifact@v3
       with:
         name: cost-manager
-        path: cost-manager
+        path: ./bin/cost-manager
   release:
     # Only build Docker image for repository PRs since secrets are not available to forks:
     # https://github.com/orgs/community/discussions/25217#discussioncomment-3246904

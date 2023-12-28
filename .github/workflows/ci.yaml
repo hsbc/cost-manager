@@ -2,7 +2,7 @@ name: ci
 on: push
 jobs:
   # https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -13,22 +13,19 @@ jobs:
         go-version: '1.21'
     - name: Download dependencies
       run: go mod download
+    - name: Lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: v1.54
     - name: Test
       run: make test
     - name: Build
       run: make build
-    - name: Upload binary
-      uses: actions/upload-artifact@v3
-      with:
-        name: cost-manager
-        path: ./bin/cost-manager
   # https://docs.docker.com/build/ci/github-actions/multi-platform/
-  release:
-    # Only build Docker image for repository PRs since secrets are not available to forks:
-    # https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
+  build:
+    # Do not build Docker images for forked repositories since Docker Hub secrets are not available:
+    # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
     if: ${{ ! github.event.pull_request.head.repo.fork }}
-    # We require the cost-manager binary artifact from the build job
-    needs: build
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -42,11 +39,6 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Download binary
-      uses: actions/download-artifact@v3
-      with:
-        name: cost-manager
-        path: ./bin/cost-manager
     - name: Build and push
       uses: docker/build-push-action@v5
       # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
@@ -55,6 +47,6 @@ jobs:
         BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
       with:
         context: .
-        platforms: linux/amd64
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}

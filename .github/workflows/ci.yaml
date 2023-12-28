@@ -7,8 +7,7 @@ permissions:
   checks: write
 jobs:
   # https://github.com/golangci/golangci-lint-action?tab=readme-ov-file#how-to-use
-  golangci:
-    name: lint
+  lint:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

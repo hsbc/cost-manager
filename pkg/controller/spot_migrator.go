@@ -111,6 +111,7 @@ func (sm *SpotMigrator) Start(ctx context.Context) error {
 	}
 }
 
+// run runs spot migration
 func (sm *SpotMigrator) run(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	for {
@@ -162,7 +163,7 @@ func (sm *SpotMigrator) run(ctx context.Context) error {
 		// If any on-demand Nodes were created while draining then we assume that there are no more
 		// spot VMs available and that spot migration is complete
 		if nodeCreated(beforeDrainOnDemandNodes, afterDrainOnDemandNodes) {
-			logger.Info("Node was created while draining")
+			logger.Info("Spot migration complete")
 			return nil
 		}
 	}
@@ -187,7 +188,7 @@ func (sm *SpotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 	return onDemandNodes, nil
 }
 
-// drainNode drains the specified Node and deletes the underlying instance
+// drainAndDeleteNode drains the specified Node and deletes the underlying instance
 func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Node) error {
 	logger := log.FromContext(ctx, "node", node.Name)
 
@@ -215,7 +216,7 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 	// Since the underlying instance has been deleted we expect the Node object to be deleted from
 	// the Kubernetes API server by the node controller:
 	// https://kubernetes.io/docs/concepts/architecture/cloud-controller/#node-controller
-	logger.Info("Waiting for Node to be deleted")
+	logger.Info("Waiting for Node object to be deleted")
 	err = kubernetes.WaitForNodeToBeDeleted(ctx, sm.Clientset, node.Name)
 	if err != nil {
 		return err

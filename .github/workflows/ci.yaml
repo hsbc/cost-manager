@@ -80,11 +80,11 @@ jobs:
     - name: Install CRDs
       run: |
         kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
-    - # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
-      shell: bash -eo pipefail {0}
+    - name: Install cost-manager
       run: |
         kubectl create namespace cost-manager
         helm template ./charts/cost-manager \
           -n cost-manager \
           --set iam.gcp.serviceAccount=cost-manager@example.iam.gserviceaccount.com \
           --set vpa.enabled=true | kubectl apply -f -
+        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m

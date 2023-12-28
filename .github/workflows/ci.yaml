@@ -1,4 +1,3 @@
-# https://docs.docker.com/build/ci/github-actions/multi-platform/
 name: ci
 on: push
 jobs:
@@ -23,6 +22,7 @@ jobs:
       with:
         name: cost-manager
         path: ./bin/cost-manager
+  # https://docs.docker.com/build/ci/github-actions/multi-platform/
   release:
     # Only build Docker image for repository PRs since secrets are not available to forks:
     # https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
@@ -46,6 +46,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: cost-manager
+        path: ./bin/cost-manager
     - name: Build and push
       uses: docker/build-push-action@v5
       # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable

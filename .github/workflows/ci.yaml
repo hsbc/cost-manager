@@ -25,8 +25,8 @@ jobs:
         path: cost-manager
   release:
     # Only build Docker image for repository PRs since secrets are not available to forks:
-    # https://github.com/orgs/community/discussions/25217#discussioncomment-3246902
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    # https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
+    if: ${{ ! github.event.pull_request.head.repo.fork }}
     # We require the cost-manager binary artifact from the build job
     needs: build
     runs-on: ubuntu-latest

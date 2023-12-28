@@ -79,7 +79,7 @@ jobs:
     - uses: helm/kind-action@v1.8.0
     - name: Install CRDs
       run: |
-        kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
+        kubectl apply -f https://github.com/kubernetes/autoscaler/blob/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
     - run: |
         kubectl create namespace cost-manager
         helm template ./charts/cost-manager \

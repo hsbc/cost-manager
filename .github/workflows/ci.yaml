@@ -63,6 +63,31 @@ jobs:
         platforms: linux/amd64
         push: true
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
-        # https://docs.docker.com/build/ci/github-actions/cache/#registry-cache
-        cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:buildcache
-        cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:buildcache,mode=max
+        # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+  kind:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: azure/setup-helm@v3
+      with:
+        version: v3.12.1
+    - run: |
+        helm lint --strict ./charts/cost-manager
+    - uses: helm/kind-action@v1.8.0
+    - name: Install CRDs
+      run: |
+        kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
+    - name: Install cost-manager
+      # Use bash shell to set pipefail option:
+      # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+      shell: bash
+      run: |
+        kubectl create namespace cost-manager
+        helm template ./charts/cost-manager \
+          -n cost-manager \
+          --set iam.gcp.serviceAccount=cost-manager@example.iam.gserviceaccount.com \
+          --set vpa.enabled=true | kubectl apply -f -
+        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m

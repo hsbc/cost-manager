@@ -85,7 +85,7 @@ jobs:
         # If we push multiple tags then this will not work because they will be space delimited:
         # https://docs.docker.com/build/ci/github-actions/push-multi-registries/
         # https://github.com/docker/build-push-action#outputs
-        REPOSITORY: ${{ fromJSON(needs.build.outputs.metadata).toJSON("image.name") }}
+        REPOSITORY: ${{ fromJSON(needs.build.outputs.metadata).${{'image.name'}} }}
       run: |
         kubectl create namespace cost-manager
         helm template ./charts/cost-manager \

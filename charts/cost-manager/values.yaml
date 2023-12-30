@@ -2,7 +2,7 @@ image:
   pullPolicy: IfNotPresent
   # TODO(dippynark): Use HSBC Docker Hub repository
   repository: docker.io/dippynark/cost-manager
-  tag: latest
+  tag: ""
 
 # Specify GCP Workload Identity service account email address bound to the
 # roles/compute.instanceAdmin role to allow compute instance deletion:

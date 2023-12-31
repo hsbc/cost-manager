@@ -3,6 +3,7 @@ Dockerfile
 
 .git/
 .gitignore
+.github/
 
 bin/
 

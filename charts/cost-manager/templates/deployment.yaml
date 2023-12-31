@@ -24,7 +24,11 @@ spec:
         fsGroup: 1000
       containers:
       - name: cost-manager
+        {{- if .Values.image.tag }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        {{- else }}
+        image: "{{ .Values.image.repository }}"
+        {{- end }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         resources:
           requests:

@@ -41,6 +41,10 @@ jobs:
     - lint
     - test
     runs-on: ubuntu-latest
+    # Define Docker build result metadata output:
+    # https://github.com/docker/build-push-action#outputs
+    outputs:
+      metadata: ${{ steps.docker-build-push.outputs.metadata }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up QEMU
@@ -50,11 +54,13 @@ jobs:
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        # We use a GitHub variable to store the Docker Hub username to avoid outputs being skipped:
+        # https://docs.github.com/en/actions/learn-github-actions/variables
+        username: ${{ vars.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Build and push
       uses: docker/build-push-action@v5
-      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+      id: docker-build-push
       env:
         # https://github.com/github/docs/issues/15319#issuecomment-1662257301
         BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
@@ -62,7 +68,7 @@ jobs:
         context: .
         platforms: linux/amd64
         push: true
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
+        tags: docker.io/${{ vars.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
         cache-to: type=gha,mode=max
@@ -74,20 +80,25 @@ jobs:
     - uses: azure/setup-helm@v3
       with:
         version: v3.12.1
-    - run: |
-        helm lint --strict ./charts/cost-manager
+    - name: Helm lint
+      run: helm lint --strict ./charts/cost-manager
     - uses: helm/kind-action@v1.8.0
     - name: Install CRDs
-      run: |
-        kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
+      run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
     - name: Install cost-manager
       # Use bash shell to set pipefail option:
       # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
       shell: bash
+      # Use an intermediate environment variable to avoid injection attacks:
+      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+      env:
+        # If we push multiple tags then this will not work because they will be space delimited
+        IMAGE_NAME: ${{ fromJSON(needs.build.outputs.metadata)['image.name'] }}
       run: |
         kubectl create namespace cost-manager
         helm template ./charts/cost-manager \
           -n cost-manager \
+          --set image.repository="${IMAGE_NAME}" \
           --set iam.gcp.serviceAccount=cost-manager@example.iam.gserviceaccount.com \
           --set vpa.enabled=true | kubectl apply -f -
         kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m

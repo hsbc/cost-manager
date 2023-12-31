@@ -41,10 +41,10 @@ jobs:
     - lint
     - test
     runs-on: ubuntu-latest
-    # Define output to retrieve the name of the built image:
-    # https://github.com/docker/build-push-action/issues/614#issuecomment-1130396065
+    # Define Docker build result metadata output:
+    # https://github.com/docker/build-push-action#outputs
     outputs:
-      image-name: ${{ steps.get-image-name.outputs.IMAGE_NAME }}
+      metadata: ${{ steps.docker-build-push.outputs.metadata }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up QEMU
@@ -70,15 +70,6 @@ jobs:
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
         cache-to: type=gha,mode=max
-    - name: Get image name
-      id: get-image-name
-      run: echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
-      # Use intermediate environment variable to avoid injection attacks:
-      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
-      env:
-        # If we push multiple tags then this will not work because they will be space delimited:
-        # https://github.com/docker/build-push-action#outputs
-        IMAGE_NAME: ${{ fromJSON(steps.docker-build-push.outputs.metadata)['image.name'] }}
   kind:
     needs: build
     runs-on: ubuntu-latest
@@ -96,8 +87,11 @@ jobs:
       # Use bash shell to set pipefail option:
       # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
       shell: bash
+      # Use an intermediate environment variable to avoid injection attacks:
+      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
       env:
-        IMAGE_NAME: ${{ needs.build.outputs.image-name }}
+        # If we push multiple tags then this will not work because they will be space delimited
+        IMAGE_NAME: ${{ fromJSON(needs.build.outputs.metadata)['image.name'] }}
       run: |
         kubectl create namespace cost-manager
         helm template ./charts/cost-manager \

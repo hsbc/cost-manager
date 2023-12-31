@@ -41,8 +41,10 @@ jobs:
     - lint
     - test
     runs-on: ubuntu-latest
+    # Define output to retrieve the name of the built image:
+    # https://github.com/docker/build-push-action/issues/614#issuecomment-1130396065
     outputs:
-      metadata: ${{ steps.build.outputs.metadata }}
+      image-name: ${{ steps.get-image-name.outputs.IMAGE_NAME }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up QEMU
@@ -56,7 +58,7 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Build and push
       uses: docker/build-push-action@v5
-      id: build
+      id: docker-build-push
       env:
         # https://github.com/github/docs/issues/15319#issuecomment-1662257301
         BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
@@ -68,6 +70,15 @@ jobs:
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
         cache-to: type=gha,mode=max
+    - name: Get image name
+      id: get-image-name
+      run: echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+      # Use intermediate environment variable to avoid injection attacks:
+      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+      env:
+        # If we push multiple tags then this will not work because they will be space delimited:
+        # https://github.com/docker/build-push-action#outputs
+        IMAGE_NAME: ${{ fromJSON(steps.docker-build-push.outputs.metadata)['image.name'] }}
   kind:
     needs: build
     runs-on: ubuntu-latest
@@ -81,23 +92,15 @@ jobs:
     - uses: helm/kind-action@v1.8.0
     - name: Install CRDs
       run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
-    - name: Write Docker build result metadata to disk
-      run: echo "${METADATA}" > metadata.json
-      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
-      env:
-        # https://github.com/docker/build-push-action#outputs
-        METADATA: ${{ needs.build.outputs.metadata }}
     - name: Install cost-manager
       # Use bash shell to set pipefail option:
       # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
       shell: bash
       run: |
         kubectl create namespace cost-manager
-        # If we push multiple tags then this will not work because they will be space delimited
-        REPOSITORY="$(jq -er '."image.name"' metadata.json)"
         helm template ./charts/cost-manager \
           -n cost-manager \
-          --set image.repository="${REPOSITORY}" \
+          --set image.repository="${{ needs.build.outputs.image-name }}" \
           --set iam.gcp.serviceAccount=cost-manager@example.iam.gserviceaccount.com \
           --set vpa.enabled=true | kubectl apply -f -
         kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m

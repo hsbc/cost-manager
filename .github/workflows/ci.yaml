@@ -96,11 +96,13 @@ jobs:
       # Use bash shell to set pipefail option:
       # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
       shell: bash
+      env:
+        IMAGE_NAME: ${{ needs.build.outputs.image-name }}
       run: |
         kubectl create namespace cost-manager
         helm template ./charts/cost-manager \
           -n cost-manager \
-          --set image.repository="${{ needs.build.outputs.image-name }}" \
+          --set image.repository="${IMAGE_NAME}" \
           --set iam.gcp.serviceAccount=cost-manager@example.iam.gserviceaccount.com \
           --set vpa.enabled=true | kubectl apply -f -
         kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m

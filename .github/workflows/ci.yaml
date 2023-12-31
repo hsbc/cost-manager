@@ -41,6 +41,8 @@ jobs:
     - lint
     - test
     runs-on: ubuntu-latest
+    outputs:
+      metadata: ${{ steps.build.outputs.metadata }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up QEMU
@@ -54,6 +56,7 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Build and push
       uses: docker/build-push-action@v5
+      id: build
       env:
         # https://github.com/github/docs/issues/15319#issuecomment-1662257301
         BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}

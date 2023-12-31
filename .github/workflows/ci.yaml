@@ -73,15 +73,17 @@ jobs:
     - uses: azure/setup-helm@v3
       with:
         version: v3.12.1
-    - run: helm lint --strict ./charts/cost-manager
+    - name: Helm lint
+      run: helm lint --strict ./charts/cost-manager
     - uses: helm/kind-action@v1.8.0
     - name: Install CRDs
       run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
-    - run: echo "${METADATA}" > metadata.json
+    - name: Write Docker build result metadata to disk
+      run: echo "${METADATA}" > metadata.json
       # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
       env:
         # https://github.com/docker/build-push-action#outputs
-        METADATA: ${{ steps.build.outputs.metadata }}
+        METADATA: ${{ needs.build.outputs.metadata }}
     - name: Install cost-manager
       # Use bash shell to set pipefail option:
       # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell

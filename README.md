@@ -19,15 +19,16 @@ workloads are already running on on-demand VMs there is no reason for them to mi
 
 To improve spot VM utilisation, [spot-migrator](./pkg/controller/spot_migrator.go) periodically
 attempts to migrate workloads from on-demand VMs to spot VMs by draining on-demand Nodes to force
-cluster scale up and relying on the fact that the cluster autoscaler [attempts to expand the least
+cluster scale up, relying on the fact that the cluster autoscaler [attempts to expand the least
 expensive possible node
-group](https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md).
-If an on-demand VM is added to the cluster then spot-migrator assumes that there are currently no
-more spot VMs available and waits for the next migration attempt (currently every hour) however if
-no on-demand VMs were added then spot-migrator continues to drain on-demand VMs until there are no
-more left in the cluster (and all workloads are running on spot VMs). Node draining respects [Pod
-Disruption Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/) to ensure that
-workloads are migrated whilst maintaining desired levels of availability.
+group](https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md),
+taking into account the reduced cost of spot VMs. If an on-demand VM is added to the cluster then
+spot-migrator assumes that there are currently no more spot VMs available and waits for the next
+migration attempt (currently every hour) however if no on-demand VMs were added then spot-migrator
+continues to drain on-demand VMs until there are no more left in the cluster (and all workloads are
+running on spot VMs). Node draining respects [Pod Disruption
+Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/) to ensure that workloads
+are migrated whilst maintaining desired levels of availability.
 
 Currently only [GKE
 Standard](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clusters) clusters are

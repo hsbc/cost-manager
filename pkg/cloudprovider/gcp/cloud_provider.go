@@ -15,8 +15,9 @@ import (
 
 const (
 	// https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms#scheduling-workloads
-	spotVMLabelKey   = "cloud.google.com/gke-spot"
-	spotVMLabelValue = "true"
+	spotNodeLabelKey = "cloud.google.com/gke-spot"
+	// https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms#use_nodeselector_to_schedule_pods_on_preemptible_vms
+	preemptibleNodeLabelKey = "cloud.google.com/gke-preemptible"
 
 	// After kube-proxy starts failing its health check GCP load balancers should mark the instance
 	// as unhealthy within 24 seconds but we wait for slightly longer to give in-flight connections
@@ -189,14 +190,12 @@ func (gcp *CloudProvider) DeleteInstance(ctx context.Context, node *corev1.Node)
 	return nil
 }
 
-// IsSpotInstance determines whether the underlying compute instance is a spot VM
+// IsSpotInstance determines whether the underlying compute instance is a spot VM. We consider
+// preemptible VMs to be spot VMs to align with the cluster autoscaler:
+// https://github.com/kubernetes/autoscaler/blob/10fafe758c118adeb55b28718dc826511cc5ba40/cluster-autoscaler/cloudprovider/gce/gce_price_model.go#L220-L230
 func (gcp *CloudProvider) IsSpotInstance(ctx context.Context, node *corev1.Node) (bool, error) {
 	if node.Labels == nil {
 		return false, nil
 	}
-	value, ok := node.Labels[spotVMLabelKey]
-	if !ok {
-		return false, nil
-	}
-	return value == spotVMLabelValue, nil
+	return node.Labels[spotNodeLabelKey] == "true" || node.Labels[preemptibleNodeLabelKey] == "true", nil
 }

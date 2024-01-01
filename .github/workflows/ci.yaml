@@ -129,5 +129,4 @@ jobs:
         tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
-        cache-to: type=gha,mode=max
         push: true

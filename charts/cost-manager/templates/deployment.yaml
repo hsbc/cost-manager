@@ -5,6 +5,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   replicas: 1
+  minReadySeconds: 10
   strategy:
     type: Recreate
   selector:

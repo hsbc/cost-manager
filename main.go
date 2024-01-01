@@ -1,9 +1,10 @@
 package main
 
 import (
+	"flag"
 	"os"
 
-	"github.com/hsbc/cost-manager/pkg/cloudprovider/gcp"
+	"github.com/hsbc/cost-manager/pkg/cloudprovider"
 	"github.com/hsbc/cost-manager/pkg/controller"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/hsbc/cost-manager/pkg/logging"
@@ -22,6 +23,9 @@ func init() {
 }
 
 func main() {
+	cloudProviderName := flag.String("cloud-provider", "", "Cloud provider")
+	flag.Parse()
+
 	// Create new scheme
 	scheme, err := kubernetes.NewScheme()
 	if err != nil {
@@ -54,8 +58,8 @@ func main() {
 	// Create context
 	ctx := signals.SetupSignalHandler()
 
-	// Once we support cloud providers other than GCP we can make this configurable
-	cloudProvider, err := gcp.NewCloudProvider(ctx)
+	// Instantiate cloud provider
+	cloudProvider, err := cloudprovider.NewCloudProvider(ctx, *cloudProviderName)
 	if err != nil {
 		logging.Logger.Error(err, "failed to create cloud provider")
 		os.Exit(1)

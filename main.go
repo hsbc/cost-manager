@@ -1,8 +1,11 @@
 package main
 
 import (
+	"flag"
 	"os"
 
+	"github.com/hsbc/cost-manager/pkg/cloudprovider"
+	"github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/hsbc/cost-manager/pkg/cloudprovider/gcp"
 	"github.com/hsbc/cost-manager/pkg/controller"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
@@ -21,7 +24,19 @@ func init() {
 	log.SetLogger(zap.New())
 }
 
+var (
+	cloudProviderName string
+)
+
 func main() {
+	// Parse flags
+	flag.StringVar(&cloudProviderName, "cloud-provider", "", "Cloud provider")
+	flag.Parse()
+	if cloudProviderName == "" {
+		logging.Logger.Error(nil, "cloud-provider flag must be specified")
+		os.Exit(1)
+	}
+
 	// Create new scheme
 	scheme, err := kubernetes.NewScheme()
 	if err != nil {
@@ -54,11 +69,16 @@ func main() {
 	// Create context
 	ctx := signals.SetupSignalHandler()
 
-	// Once we support cloud providers other than GCP we can make this configurable
-	cloudProvider, err := gcp.NewCloudProvider(ctx)
-	if err != nil {
-		logging.Logger.Error(err, "failed to create cloud provider")
-		os.Exit(1)
+	// Instantiate cloud provider
+	var cloudProvider cloudprovider.CloudProvider
+	if cloudProviderName == "gcp" {
+		cloudProvider, err = gcp.NewCloudProvider(ctx)
+		if err != nil {
+			logging.Logger.Error(err, "failed to create cloud provider")
+			os.Exit(1)
+		}
+	} else {
+		cloudProvider = &fake.CloudProvider{}
 	}
 
 	// Setup spot-migrator

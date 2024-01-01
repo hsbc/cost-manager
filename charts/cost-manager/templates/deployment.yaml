@@ -30,6 +30,8 @@ spec:
         image: "{{ .Values.image.repository }}"
         {{- end }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --cloud-provider={{ .Values.cloudProvider }}
         resources:
           requests:
             cpu: 10m

@@ -4,6 +4,8 @@ image:
   repository: docker.io/dippynark/cost-manager
   tag: ""
 
+cloudProvider: fake
+
 serviceAccount:
   annotations: {}
 

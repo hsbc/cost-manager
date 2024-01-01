@@ -22,12 +22,8 @@ func init() {
 	log.SetLogger(zap.New())
 }
 
-var (
-	cloudProviderName string
-)
-
 func main() {
-	flag.StringVar(&cloudProviderName, "cloud-provider", "", "Cloud provider")
+	cloudProviderName := flag.String("cloud-provider", "", "Cloud provider")
 	flag.Parse()
 
 	// Create new scheme
@@ -63,7 +59,7 @@ func main() {
 	ctx := signals.SetupSignalHandler()
 
 	// Instantiate cloud provider
-	cloudProvider, err := cloudprovider.NewCloudProvider(ctx, cloudProviderName)
+	cloudProvider, err := cloudprovider.NewCloudProvider(ctx, *cloudProviderName)
 	if err != nil {
 		logging.Logger.Error(err, "failed to create cloud provider")
 		os.Exit(1)

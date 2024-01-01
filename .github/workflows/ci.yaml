@@ -59,15 +59,18 @@ jobs:
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
         cache-to: type=gha,mode=max
-        # Save image to tarball to load into kind cluster:
-        # https://docs.docker.com/build/ci/github-actions/share-image-jobs/
-        outputs: type=docker,dest=/tmp/cost-manager.tar
+        # Export to Docker so we can load into kind cluster:
+        # https://docs.docker.com/build/ci/github-actions/export-docker/
+        load: true
     - name: Create kind cluster
       uses: helm/kind-action@v1.8.0
       with:
         cluster_name: kind
     - name: Load image into kind cluster
-      run: kind load image-archive /tmp/cost-manager.tar
+      env:
+        # If we build multiple tags then this will not work because they will be space delimited
+        IMAGE_NAME: ${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}
+      run: kind load docker-image "${IMAGE_NAME}"
     - name: Setup Helm
       uses: azure/setup-helm@v3
       with:
@@ -120,7 +123,7 @@ jobs:
       with:
         context: .
         platforms: linux/amd64
-        tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
+        tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
         cache-to: type=gha,mode=max

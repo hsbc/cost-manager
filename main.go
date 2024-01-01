@@ -5,8 +5,6 @@ import (
 	"os"
 
 	"github.com/hsbc/cost-manager/pkg/cloudprovider"
-	"github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
-	"github.com/hsbc/cost-manager/pkg/cloudprovider/gcp"
 	"github.com/hsbc/cost-manager/pkg/controller"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/hsbc/cost-manager/pkg/logging"
@@ -29,13 +27,8 @@ var (
 )
 
 func main() {
-	// Parse flags
 	flag.StringVar(&cloudProviderName, "cloud-provider", "", "Cloud provider")
 	flag.Parse()
-	if cloudProviderName == "" {
-		logging.Logger.Error(nil, "cloud provider is required")
-		os.Exit(1)
-	}
 
 	// Create new scheme
 	scheme, err := kubernetes.NewScheme()
@@ -70,17 +63,9 @@ func main() {
 	ctx := signals.SetupSignalHandler()
 
 	// Instantiate cloud provider
-	var cloudProvider cloudprovider.CloudProvider
-	if cloudProviderName == "gcp" {
-		cloudProvider, err = gcp.NewCloudProvider(ctx)
-		if err != nil {
-			logging.Logger.Error(err, "failed to create cloud provider")
-			os.Exit(1)
-		}
-	} else if cloudProviderName == "fake" {
-		cloudProvider = &fake.CloudProvider{}
-	} else {
-		logging.Logger.Error(err, "unrecognised cloud provider: "+cloudProviderName)
+	cloudProvider, err := cloudprovider.NewCloudProvider(ctx, cloudProviderName)
+	if err != nil {
+		logging.Logger.Error(err, "failed to create cloud provider")
 		os.Exit(1)
 	}
 

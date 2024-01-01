@@ -82,12 +82,17 @@ jobs:
       shell: bash
       run: |
         kubectl create namespace cost-manager
-        helm template ./charts/cost-manager \
-          -n cost-manager \
-          --set image.repository="${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}" \
-          --set image.pullPolicy=Never \
-          --set serviceAccount.annotations."iam\.gke\.io/gcp-service-account"=cost-manager@example.iam.gserviceaccount.com \
-          --set vpa.enabled=true | kubectl apply -f -
+        cat <<EOF > values.yaml
+        image:
+          pullPolicy: Never
+          repository: "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
+        serviceAccount:
+          annotations:
+            iam.gke.io/gcp-service-account: cost-manager@example.iam.gserviceaccount.com
+        vpa:
+          enabled: true
+        EOF
+        helm template ./charts/cost-manager -n cost-manager -f values.yaml | kubectl apply -f -
         kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m
   release:
     # Make sure the tests have passed before releasing

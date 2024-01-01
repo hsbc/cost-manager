@@ -55,7 +55,7 @@ jobs:
       with:
         context: .
         platforms: linux/amd64
-        tags: cost-manager:test
+        tags: docker.io/dippynark/cost-manager:test
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
         cache-to: type=gha,mode=max
@@ -130,6 +130,6 @@ jobs:
       with:
         context: .
         platforms: linux/amd64
-        tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
+        tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         cache-from: type=gha
         push: true

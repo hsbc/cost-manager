@@ -86,6 +86,7 @@ jobs:
         image:
           pullPolicy: Never
           repository: "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
+        cloudProvider: fake
         serviceAccount:
           annotations:
             iam.gke.io/gcp-service-account: cost-manager@example.iam.gserviceaccount.com

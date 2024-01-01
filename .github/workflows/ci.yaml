@@ -76,6 +76,7 @@ jobs:
         platforms: linux/amd64
         # Only push to Docker Hub when we have logged in
         # push: ${{ ! github.event.pull_request.head.repo.fork }}
+        push: true
         tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha

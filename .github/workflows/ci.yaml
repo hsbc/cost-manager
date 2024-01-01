@@ -82,7 +82,7 @@ jobs:
         cache-to: type=gha,mode=max
         # Save image to tarball to load into kind cluster:
         # https://docs.docker.com/build/ci/github-actions/share-image-jobs/
-        outputs: type=tar,dest=/tmp/cost-manager.tar
+        outputs: type=docker,dest=/tmp/cost-manager.tar
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:

@@ -67,10 +67,7 @@ jobs:
       with:
         cluster_name: kind
     - name: Load image into kind cluster
-      env:
-        # If we build multiple tags then this will not work because they will be space delimited
-        IMAGE_NAME: ${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}
-      run: kind load docker-image "${IMAGE_NAME}"
+      run: kind load docker-image "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
     - name: Setup Helm
       uses: azure/setup-helm@v3
       with:
@@ -83,18 +80,15 @@ jobs:
       # Use bash shell to set pipefail option:
       # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
       shell: bash
-      env:
-        # If we build multiple tags then this will not work because they will be space delimited
-        IMAGE_NAME: ${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}
       run: |
         kubectl create namespace cost-manager
         helm template ./charts/cost-manager \
           -n cost-manager \
-          --set image.repository="${IMAGE_NAME}" \
+          --set image.repository="${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}" \
           --set image.pullPolicy=Never \
           --set serviceAccount.annotations."iam\.gke\.io/gcp-service-account"=cost-manager@example.iam.gserviceaccount.com \
           --set vpa.enabled=true | kubectl apply -f -
-        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m
+        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager
   release:
     # Make sure the tests have passed before releasing
     needs:

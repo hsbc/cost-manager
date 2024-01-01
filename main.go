@@ -77,8 +77,11 @@ func main() {
 			logging.Logger.Error(err, "failed to create cloud provider")
 			os.Exit(1)
 		}
-	} else {
+	} else if cloudProviderName == "fake" {
 		cloudProvider = &fake.CloudProvider{}
+	} else {
+		logging.Logger.Error(err, "unrecognised cloud provider: "+cloudProviderName)
+		os.Exit(1)
 	}
 
 	// Setup spot-migrator

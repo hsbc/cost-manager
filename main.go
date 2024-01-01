@@ -33,7 +33,7 @@ func main() {
 	flag.StringVar(&cloudProviderName, "cloud-provider", "", "Cloud provider")
 	flag.Parse()
 	if cloudProviderName == "" {
-		logging.Logger.Error(nil, "cloud-provider flag must be specified")
+		logging.Logger.Error(nil, "cloud provider is required")
 		os.Exit(1)
 	}
 

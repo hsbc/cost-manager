@@ -40,15 +40,6 @@ jobs:
     - run: make build
   # https://docs.docker.com/build/ci/github-actions/multi-platform/
   build:
-    # Make sure the tests have passed before building
-    needs:
-    - lint
-    - test
-    runs-on: ubuntu-latest
-    # Define Docker build result metadata output:
-    # https://github.com/docker/build-push-action#outputs
-    outputs:
-      metadata: ${{ steps.docker-build-push.outputs.metadata }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up QEMU
@@ -100,24 +91,36 @@ jobs:
           --set serviceAccount.annotations."iam\.gke\.io/gcp-service-account"=cost-manager@example.iam.gserviceaccount.com \
           --set vpa.enabled=true | kubectl apply -f -
         kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m
+  release:
+    # Make sure the tests have passed before releasing
+    needs:
+    - lint
+    - test
+    - build
+    runs-on: ubuntu-latest
+    # Do not release for forked repositories since secrets are not available:
+    # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
+    if: ${{ ! github.event.pull_request.head.repo.fork }}
+    steps:
+    - uses: actions/checkout@v4
     - name: Login to Docker Hub
       uses: docker/login-action@v3
-      id: login
-      # Do not login to Docker Hub for forked repositories since secrets are not available:
-      # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
-      if: ${{ ! github.event.pull_request.head.repo.fork }}
+      id: docker-login
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Push
+    # Buildx does not currently support pushing a previously built image so we rebuild from cache:
+    # https://github.com/docker/buildx/issues/1915
+    - name: Push Docker image
       uses: docker/build-push-action@v5
-      # Only push to Docker Hub if we have logged in successfully
-      if: ${{ steps.login.outcome == 'success' }}
       env:
         # https://github.com/github/docs/issues/15319#issuecomment-1662257301
         BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
       with:
         context: .
         platforms: linux/amd64
-        push: true
         tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
+        # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        push: true

@@ -4,12 +4,8 @@ image:
   repository: docker.io/dippynark/cost-manager
   tag: ""
 
-# Specify GCP Workload Identity service account email address bound to the
-# roles/compute.instanceAdmin role to allow compute instance deletion:
-# https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity 
-iam:
-  gcp:
-    serviceAccount: ""
+serviceAccount:
+  annotations: {}
 
 # Create VPA to vertically autoscale cost-manager:
 # https://cloud.google.com/kubernetes-engine/docs/concepts/verticalpodautoscaler

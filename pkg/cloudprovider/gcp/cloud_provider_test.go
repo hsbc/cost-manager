@@ -14,7 +14,7 @@ func TestIsSpotInstance(t *testing.T) {
 		node           *corev1.Node
 		isSpotInstance bool
 	}{
-		"hasSpotVMLabelSetToTrue": {
+		"hasSpotLabelSetToTrue": {
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -24,11 +24,31 @@ func TestIsSpotInstance(t *testing.T) {
 			},
 			isSpotInstance: true,
 		},
-		"hasSpotVMLabelSetToFalse": {
+		"hasPreemptibleLabelSetToTrue": {
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"cloud.google.com/gke-preemptible": "true",
+					},
+				},
+			},
+			isSpotInstance: true,
+		},
+		"hasSpotLabelSetToFalse": {
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"cloud.google.com/gke-spot": "false",
+					},
+				},
+			},
+			isSpotInstance: false,
+		},
+		"hasPreemptibleLabelSetToFalse": {
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"cloud.google.com/gke-preemptible": "false",
 					},
 				},
 			},

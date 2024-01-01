@@ -1,5 +1,12 @@
 name: ci
-on: push
+# Trigger on push to main branch and any pull requests to main branch
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
 # https://github.com/golangci/golangci-lint-action?tab=readme-ov-file#comments-and-annotations
 permissions:
   contents: read
@@ -33,9 +40,6 @@ jobs:
     - run: make build
   # https://docs.docker.com/build/ci/github-actions/multi-platform/
   build:
-    # Do not build Docker images for forked repositories since Docker Hub secrets are not available:
-    # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
-    if: ${{ ! github.event.pull_request.head.repo.fork }}
     # Make sure the tests have passed before building
     needs:
     - lint
@@ -51,16 +55,64 @@ jobs:
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+    # Build without pushing to first validate that the image works as expected:
+    # https://docs.docker.com/build/ci/github-actions/test-before-push/
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      id: docker-build
+      with:
+        context: .
+        platforms: linux/amd64
+        tags: cost-manager:test
+        # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        # Save image to tarball to load into kind cluster:
+        # https://docs.docker.com/build/ci/github-actions/share-image-jobs/
+        outputs: type=docker,dest=/tmp/cost-manager.tar
+    - name: Create kind cluster
+      uses: helm/kind-action@v1.8.0
+      with:
+        cluster_name: kind
+    - name: Load image into kind cluster
+      run: kind load image-archive /tmp/cost-manager.tar
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.12.1
+    - name: Helm lint
+      run: helm lint --strict ./charts/cost-manager
+    - name: Install CRDs
+      run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
+    - name: Install cost-manager
+      # Use bash shell to set pipefail option:
+      # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+      shell: bash
+      env:
+        # If we build multiple tags then this will not work because they will be space delimited
+        IMAGE_NAME: ${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}
+      run: |
+        kubectl create namespace cost-manager
+        helm template ./charts/cost-manager \
+          -n cost-manager \
+          --set image.repository="${IMAGE_NAME}" \
+          --set image.pullPolicy=Never \
+          --set serviceAccount.annotations."iam\.gke\.io/gcp-service-account"=cost-manager@example.iam.gserviceaccount.com \
+          --set vpa.enabled=true | kubectl apply -f -
+        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m
     - name: Login to Docker Hub
       uses: docker/login-action@v3
+      id: login
+      # Do not login to Docker Hub for forked repositories since secrets are not available:
+      # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
+      if: ${{ ! github.event.pull_request.head.repo.fork }}
       with:
-        # We use a GitHub variable to store the Docker Hub username to avoid outputs being skipped
-        # for containing secrets: https://docs.github.com/en/actions/learn-github-actions/variables
-        username: ${{ vars.DOCKERHUB_USERNAME }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Build and push
+    - name: Push
       uses: docker/build-push-action@v5
-      id: docker-build-push
+      # Only push to Docker Hub if we have logged in successfully
+      if: ${{ steps.login.outcome == 'success' }}
       env:
         # https://github.com/github/docs/issues/15319#issuecomment-1662257301
         BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
@@ -68,37 +120,4 @@ jobs:
         context: .
         platforms: linux/amd64
         push: true
-        tags: docker.io/${{ vars.DOCKERHUB_USERNAME }}/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
-        # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-  kind:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - uses: azure/setup-helm@v3
-      with:
-        version: v3.12.1
-    - name: Helm lint
-      run: helm lint --strict ./charts/cost-manager
-    - uses: helm/kind-action@v1.8.0
-    - name: Install CRDs
-      run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
-    - name: Install cost-manager
-      # Use bash shell to set pipefail option:
-      # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
-      shell: bash
-      # Use an intermediate environment variable to avoid injection attacks:
-      # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
-      env:
-        # If we push multiple tags then this will not work because they will be space delimited
-        IMAGE_NAME: ${{ fromJSON(needs.build.outputs.metadata)['image.name'] }}
-      run: |
-        kubectl create namespace cost-manager
-        helm template ./charts/cost-manager \
-          -n cost-manager \
-          --set image.repository="${IMAGE_NAME}" \
-          --set serviceAccount.annotations."iam\.gke\.io/gcp-service-account"=cost-manager@example.iam.gserviceaccount.com \
-          --set vpa.enabled=true | kubectl apply -f -
-        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m
+        tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}

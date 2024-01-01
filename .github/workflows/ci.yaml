@@ -93,7 +93,11 @@ jobs:
           enabled: true
         EOF
         helm template ./charts/cost-manager -n cost-manager -f values.yaml | kubectl apply -f -
-        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=10m
+        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=2m || {
+          kubectl describe deployment/cost-manager -n cost-manager
+          kubectl describe pod -n cost-manager
+          exit 1
+        }
   release:
     # Make sure the tests have passed before releasing
     needs:

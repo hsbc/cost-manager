@@ -1,5 +1,10 @@
 name: ci
-on: push
+on:
+  branch:
+  - main
+  pull_request:
+    branches:
+    - main
 # https://github.com/golangci/golangci-lint-action?tab=readme-ov-file#comments-and-annotations
 permissions:
   contents: read

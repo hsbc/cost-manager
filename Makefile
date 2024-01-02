@@ -7,7 +7,7 @@ build:
 	go build -o $(BIN_DIR)/cost-manager
 
 run: build
-	$(BIN_DIR)/cost-manager
+	$(BIN_DIR)/cost-manager --config ./hack/config.yaml
 
 image:
 	docker build -t cost-manager .

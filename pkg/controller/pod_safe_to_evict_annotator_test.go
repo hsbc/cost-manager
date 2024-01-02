@@ -70,7 +70,7 @@ func TestPodSafeToEvictAnnotatorReconcileDoesNotUpdateAnnotation(t *testing.T) {
 	_, err = podSafeToEvictAnnotator.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}})
 	require.Nil(t, err)
 
-	// Verify that the Pod has been annotated
+	// Verify that the Pod annotation has not been updated
 	err = client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, pod)
 	require.Nil(t, err)
 	value, ok := pod.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"]

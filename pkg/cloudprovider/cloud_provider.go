@@ -35,6 +35,6 @@ func NewCloudProvider(ctx context.Context, cloudProviderName string) (CloudProvi
 	case gcpCloudProviderName:
 		return gcp.NewCloudProvider(ctx)
 	default:
-		return nil, fmt.Errorf("unrecognised cloud provider: %s", cloudProviderName)
+		return nil, fmt.Errorf("unknown cloud provider: %s", cloudProviderName)
 	}
 }

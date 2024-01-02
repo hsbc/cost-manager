@@ -28,9 +28,15 @@ func TestValidate(t *testing.T) {
 			config: &v1alpha1.CostManagerConfiguration{},
 			valid:  true,
 		},
-		"unrecognisedController": {
+		"knownController": {
 			config: &v1alpha1.CostManagerConfiguration{
-				Controllers: []string{"unrecognised-controller"},
+				Controllers: []string{"spot-migrator"},
+			},
+			valid: true,
+		},
+		"unknownController": {
+			config: &v1alpha1.CostManagerConfiguration{
+				Controllers: []string{"unknown-controller"},
 			},
 			valid: false,
 		},

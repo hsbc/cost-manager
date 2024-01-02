@@ -91,7 +91,7 @@ jobs:
           apiVersion: cost-manager.io/v1alpha1
           kind: CostManagerConfiguration
           cloudProvider:
-            name: fake
+            name: missing
           controllers:
           - spot-migrator
         serviceAccount:

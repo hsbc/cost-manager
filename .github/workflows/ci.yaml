@@ -92,8 +92,6 @@ jobs:
           kind: CostManagerConfiguration
           cloudProvider:
             name: fake
-          controllers:
-          - spot-migrator
         serviceAccount:
           annotations:
             iam.gke.io/gcp-service-account: cost-manager@example.iam.gserviceaccount.com

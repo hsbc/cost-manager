@@ -6,7 +6,7 @@ reductions for the cluster they are running on.
 
 ## Controllers
 
-Here we provide details of the various controllers and how they work.
+Here we provide details of the various cost-manager controllers.
 
 ### spot-migrator
 

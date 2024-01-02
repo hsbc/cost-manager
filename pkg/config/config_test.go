@@ -14,12 +14,14 @@ func TestDecode(t *testing.T) {
 		valid      bool
 		config     *v1alpha1.CostManagerConfiguration
 	}{
-		"validCloudProviderField": {
+		"valid": {
 			configData: []byte(`
 apiVersion: cost-manager.io/v1alpha1
 kind: CostManagerConfiguration
 cloudProvider:
   name: gcp
+controllers:
+- spot-migrator
 `),
 			valid: true,
 			config: &v1alpha1.CostManagerConfiguration{
@@ -29,21 +31,6 @@ cloudProvider:
 				},
 				CloudProvider: v1alpha1.CloudProvider{
 					Name: "gcp",
-				},
-			},
-		},
-		"validControllersField": {
-			configData: []byte(`
-apiVersion: cost-manager.io/v1alpha1
-kind: CostManagerConfiguration
-controllers:
-- spot-migrator
-`),
-			valid: true,
-			config: &v1alpha1.CostManagerConfiguration{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "cost-manager.io/v1alpha1",
-					Kind:       "CostManagerConfiguration",
 				},
 				Controllers: []string{"spot-migrator"},
 			},

@@ -10,15 +10,16 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: cost-manager
+      app.kubernetes.io/name: cost-manager
   template:
     metadata:
       labels:
-        app: cost-manager
+        app.kubernetes.io/name: cost-manager
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       serviceAccount: cost-manager
       securityContext:
@@ -32,7 +33,7 @@ spec:
         {{- end }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
-        - --cloud-provider={{ .Values.cloudProvider }}
+        - --config=/config/config.yaml
         resources:
           requests:
             cpu: 10m
@@ -46,3 +47,10 @@ spec:
           capabilities:
             drop:
             - all
+        volumeMounts:
+        - name: config
+          mountPath: /config
+      volumes:
+      - name: config
+        configMap:
+          name: cost-manager

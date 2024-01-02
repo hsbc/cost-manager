@@ -36,6 +36,7 @@ jobs:
       with:
         go-version: '1.21'
     - run: go mod download
+    - run: make verify
     - run: make test
     - run: make build
   # https://docs.docker.com/build/ci/github-actions/multi-platform/
@@ -86,7 +87,11 @@ jobs:
         image:
           pullPolicy: Never
           repository: "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
-        cloudProvider: fake
+        config:
+          apiVersion: cost-manager.io/v1alpha1
+          kind: CostManagerConfiguration
+          cloudProvider:
+            name: fake
         serviceAccount:
           annotations:
             iam.gke.io/gcp-service-account: cost-manager@example.iam.gserviceaccount.com
@@ -94,9 +99,10 @@ jobs:
           enabled: true
         EOF
         helm template ./charts/cost-manager -n cost-manager -f values.yaml | kubectl apply -f -
-        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager --timeout=2m || {
+        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager || {
           kubectl describe deployment/cost-manager -n cost-manager
-          kubectl describe pod -n cost-manager
+          kubectl describe pod -n cost-manager -l app.kubernetes.io/name=cost-manager
+          kubectl logs -n cost-manager -l app.kubernetes.io/name=cost-manager
           exit 1
         }
   release:

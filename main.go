@@ -5,11 +5,13 @@ import (
 	"os"
 
 	"github.com/hsbc/cost-manager/pkg/cloudprovider"
+	costmanagerconfig "github.com/hsbc/cost-manager/pkg/config"
 	"github.com/hsbc/cost-manager/pkg/controller"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/hsbc/cost-manager/pkg/logging"
 	clientgo "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/controller-manager/app"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,8 +25,15 @@ func init() {
 }
 
 func main() {
-	cloudProviderName := flag.String("cloud-provider", "", "Cloud provider")
+	costManagerConfigFilePath := flag.String("config", "", "Configuration file path")
 	flag.Parse()
+
+	// Load configuration
+	costManagerConfig, err := costmanagerconfig.Load(*costManagerConfigFilePath)
+	if err != nil {
+		logging.Logger.Error(err, "failed to load configuration")
+		os.Exit(1)
+	}
 
 	// Create new scheme
 	scheme, err := kubernetes.NewScheme()
@@ -59,19 +68,26 @@ func main() {
 	ctx := signals.SetupSignalHandler()
 
 	// Instantiate cloud provider
-	cloudProvider, err := cloudprovider.NewCloudProvider(ctx, *cloudProviderName)
+	cloudProvider, err := cloudprovider.NewCloudProvider(ctx, costManagerConfig.CloudProvider.Name)
 	if err != nil {
 		logging.Logger.Error(err, "failed to create cloud provider")
 		os.Exit(1)
 	}
 
-	// Setup spot-migrator
-	if err := mgr.Add(&controller.SpotMigrator{
-		Clientset:     clientset,
-		CloudProvider: cloudProvider,
-	}); err != nil {
-		logging.Logger.Error(err, "failed to setup spot-migrator")
-		os.Exit(1)
+	// Setup controllers
+	for _, controllerName := range controller.AllControllerNames {
+		if app.IsControllerEnabled(controllerName, controller.DisabledByDefaultControllerNames, costManagerConfig.Controllers) {
+			switch controllerName {
+			case controller.SpotMigratorControllerName:
+				if err := mgr.Add(&controller.SpotMigrator{
+					Clientset:     clientset,
+					CloudProvider: cloudProvider,
+				}); err != nil {
+					logging.Logger.Error(err, "failed to setup spot-migrator")
+					os.Exit(1)
+				}
+			}
+		}
 	}
 
 	// Start controller manager

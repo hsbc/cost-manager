@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/hsbc/cost-manager/pkg/api/v1alpha1"
 	"github.com/hsbc/cost-manager/pkg/cloudprovider"
-	"github.com/hsbc/cost-manager/pkg/domain"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	spotMigratorControllerName = "spot-migrator"
+	SpotMigratorControllerName = "spot-migrator"
 
 	// Running spot migration hourly seems like a good tradeoff between cluster stability and
 	// reactivity to spot availability. Note that this will schedule on the hour rather than
@@ -46,7 +46,7 @@ var (
 	})
 
 	// Label to add to Nodes before draining to allow them to be identified if we are restarted
-	nodeSelectedForDeletionLabelKey = fmt.Sprintf("%s/%s", domain.Name, "selected-for-deletion")
+	nodeSelectedForDeletionLabelKey = fmt.Sprintf("%s/%s", v1alpha1.GroupName, "selected-for-deletion")
 )
 
 // SpotMigrator periodically drains on-demand Nodes in an attempt to migrate workloads to spot
@@ -63,7 +63,7 @@ var _ manager.Runnable = &SpotMigrator{}
 
 // Start starts spot-migrator and blocks until the context is cancelled
 func (sm *SpotMigrator) Start(ctx context.Context) error {
-	logger := log.FromContext(ctx).WithName(spotMigratorControllerName)
+	logger := log.FromContext(ctx).WithName(SpotMigratorControllerName)
 	ctx = log.IntoContext(ctx, logger)
 
 	// Register Prometheus metrics

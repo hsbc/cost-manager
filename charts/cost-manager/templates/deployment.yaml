@@ -10,11 +10,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: cost-manager
+      app.kubernetes.io/name: cost-manager
   template:
     metadata:
       labels:
-        app: cost-manager
+        app.kubernetes.io/name: cost-manager
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"

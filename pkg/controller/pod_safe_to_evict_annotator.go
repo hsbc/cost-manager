@@ -11,27 +11,29 @@ import (
 )
 
 const (
+	podSafeToEvictAnnotatorControllerName = "pod-safe-to-evict-annotator"
+
 	// We copy the annotation key to avoid depending on the autoscaler respository:
 	// https://github.com/kubernetes/autoscaler/blob/389914758265a33e36683d6df7dbecf91de81802/cluster-autoscaler/utils/drain/drain.go#L33-L35
 	podSafeToEvictKey = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 )
 
-// PodSafeToEvictAnnotator adds the `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`
+// podSafeToEvictAnnotator adds the `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`
 // annotation to Pods to ensure that they do not prevent cluster scale down:
 // https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node
-type PodSafeToEvictAnnotator struct {
+type podSafeToEvictAnnotator struct {
 	Client client.Client
 }
 
-var _ reconcile.Reconciler = &PodSafeToEvictAnnotator{}
+var _ reconcile.Reconciler = &podSafeToEvictAnnotator{}
 
-func (r *PodSafeToEvictAnnotator) SetupWithManager(mgr ctrl.Manager) error {
+func (r *podSafeToEvictAnnotator) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
 		Complete(r)
 }
 
-func (r *PodSafeToEvictAnnotator) Reconcile(ctx context.Context, request reconcile.Request) (result reconcile.Result, rerr error) {
+func (r *podSafeToEvictAnnotator) Reconcile(ctx context.Context, request reconcile.Request) (result reconcile.Result, rerr error) {
 	pod := &corev1.Pod{}
 	err := r.Client.Get(ctx, request.NamespacedName, pod)
 	if errors.IsNotFound(err) {

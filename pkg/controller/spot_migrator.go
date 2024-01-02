@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	SpotMigratorControllerName = "spot-migrator"
+	spotMigratorControllerName = "spot-migrator"
 
 	// Running spot migration hourly seems like a good tradeoff between cluster stability and
 	// reactivity to spot availability. Note that this will schedule on the hour rather than
@@ -49,21 +49,21 @@ var (
 	nodeSelectedForDeletionLabelKey = fmt.Sprintf("%s/%s", v1alpha1.GroupName, "selected-for-deletion")
 )
 
-// SpotMigrator periodically drains on-demand Nodes in an attempt to migrate workloads to spot
+// spotMigrator periodically drains on-demand Nodes in an attempt to migrate workloads to spot
 // Nodes; this works because draining Nodes will eventually trigger cluster scale up and the cluster
 // autoscaler attempts to scale up the least expensive node pool, taking into account the reduced
 // cost of spot Nodes:
 // https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md
-type SpotMigrator struct {
+type spotMigrator struct {
 	Clientset     clientgo.Interface
 	CloudProvider cloudprovider.CloudProvider
 }
 
-var _ manager.Runnable = &SpotMigrator{}
+var _ manager.Runnable = &spotMigrator{}
 
 // Start starts spot-migrator and blocks until the context is cancelled
-func (sm *SpotMigrator) Start(ctx context.Context) error {
-	logger := log.FromContext(ctx).WithName(SpotMigratorControllerName)
+func (sm *spotMigrator) Start(ctx context.Context) error {
+	logger := log.FromContext(ctx).WithName(spotMigratorControllerName)
 	ctx = log.IntoContext(ctx, logger)
 
 	// Register Prometheus metrics
@@ -112,7 +112,7 @@ func (sm *SpotMigrator) Start(ctx context.Context) error {
 }
 
 // run runs spot migration
-func (sm *SpotMigrator) run(ctx context.Context) error {
+func (sm *spotMigrator) run(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	for {
 		// If the context has been cancelled then return instead of continuing with the migration
@@ -170,7 +170,7 @@ func (sm *SpotMigrator) run(ctx context.Context) error {
 }
 
 // listOnDemandNodes lists all Nodes that are not backed by a spot instance
-func (sm *SpotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, error) {
+func (sm *spotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, error) {
 	nodeList, err := sm.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -189,7 +189,7 @@ func (sm *SpotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 }
 
 // drainAndDeleteNode drains the specified Node and deletes the underlying instance
-func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Node) error {
+func (sm *spotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Node) error {
 	logger := log.FromContext(ctx, "node", node.Name)
 
 	logger.Info("Draining Node")
@@ -229,7 +229,7 @@ func (sm *SpotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 	return nil
 }
 
-func (sm *SpotMigrator) addSelectedForDeletionLabel(ctx context.Context, nodeName string) error {
+func (sm *spotMigrator) addSelectedForDeletionLabel(ctx context.Context, nodeName string) error {
 	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"true"}}}`, nodeSelectedForDeletionLabelKey))
 	_, err := sm.Clientset.CoreV1().Nodes().Patch(ctx, nodeName, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
@@ -246,7 +246,7 @@ func isSelectedForDeletion(node *corev1.Node) bool {
 	return ok && value == "true"
 }
 
-func (sm *SpotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context, node *corev1.Node) error {
+func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context, node *corev1.Node) error {
 	// Adding the cluster autoscaler taint will tell the KCCM service controller to exclude the Node
 	// from load balancing. This may or may not trigger connection draining depending on provider:
 	// https://github.com/kubernetes/kubernetes/blob/b5ba7bc4f5f49760c821cae2f152a8000922e72e/staging/src/k8s.io/cloud-provider/controllers/service/controller.go#L1043-L1051

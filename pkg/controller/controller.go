@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	// See the following for how controller names should be treated:
+	// The following link describes how controller names should be treated:
 	// https://github.com/kubernetes/cloud-provider/blob/30270693811ff7d3c4646509eed7efd659332e72/names/controller_names.go
 	AllControllerNames = []string{
 		spotMigratorControllerName,

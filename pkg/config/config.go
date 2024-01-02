@@ -9,7 +9,7 @@ import (
 	"github.com/hsbc/cost-manager/pkg/api/v1alpha1"
 	"github.com/hsbc/cost-manager/pkg/controller"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/kubectl/pkg/scheme"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
 
 func Load(configFilePath string) (*v1alpha1.CostManagerConfiguration, error) {
@@ -37,11 +37,22 @@ func Load(configFilePath string) (*v1alpha1.CostManagerConfiguration, error) {
 
 func decode(configData []byte) (*v1alpha1.CostManagerConfiguration, error) {
 	config := &v1alpha1.CostManagerConfiguration{}
-	decoder := scheme.Codecs.UniversalDecoder(v1alpha1.SchemeGroupVersion)
 
+	// We enable strict decoding to ensure that we do not accept unknown fields
+	codecFactory := serializer.NewCodecFactory(runtime.NewScheme(), serializer.EnableStrict)
+
+	decoder := codecFactory.UniversalDecoder(v1alpha1.SchemeGroupVersion)
 	err := runtime.DecodeInto(decoder, configData, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode configuration: %s", err)
+	}
+
+	// Verify that the API version and kind are what we expect
+	if config.APIVersion != v1alpha1.SchemeGroupVersion.String() {
+		return nil, fmt.Errorf("invalid API version: %s", config.APIVersion)
+	}
+	if config.Kind != "CostManagerConfiguration" {
+		return nil, fmt.Errorf("invalid kind: %s", config.Kind)
 	}
 
 	return config, nil

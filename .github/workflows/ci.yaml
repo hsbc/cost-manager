@@ -36,6 +36,7 @@ jobs:
       with:
         go-version: '1.21'
     - run: go mod download
+    - run: make verify
     - run: make test
     - run: make build
   # https://docs.docker.com/build/ci/github-actions/multi-platform/

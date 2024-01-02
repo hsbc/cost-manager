@@ -47,12 +47,12 @@ controllers:
 ### pod-safe-to-evict-annotator
 
 Certain [types of
-Pods](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node)
+Pods](https://github.com/kubernetes/autoscaler/blob/bb72e46cb0697090683969c932a38afec9089978/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node)
 can prevent the cluster autoscaler from removing a Node (e.g. Pods in the kube-system Namespace that
 do not have a PodDisruptionBudget) leading to more Nodes in the cluster than necessary. This can be
 particularly problematic for workloads that cluster operators are not in control of and can have a
-high number of replicas such as kube-dns or the [Konnectivity
-agent](https://kubernetes.io/docs/tasks/extend-kubernetes/setup-konnectivity/) which are typically
+high number of replicas, such as kube-dns or the [Konnectivity
+agent](https://kubernetes.io/docs/tasks/extend-kubernetes/setup-konnectivity/), which are typically
 installed by cloud providers.
 
 [pod-safe-to-evict-annotator](./pkg/controller/pod_safe_to_evict_annotator.go) adds the

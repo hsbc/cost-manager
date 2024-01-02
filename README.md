@@ -38,10 +38,10 @@ your cluster must be running at least one on-demand node pool and at least one s
 ```yaml
 apiVersion: cost-manager.io/v1alpha1
 kind: CostManagerConfiguration
-cloudProvider:
-  name: gcp
 controllers:
 - spot-migrator
+cloudProvider:
+  name: gcp
 ```
 
 ### pod-safe-to-evict-annotator
@@ -93,10 +93,10 @@ cat <<EOF > values.yaml
 config:
   apiVersion: cost-manager.io/v1alpha1
   kind: CostManagerConfiguration
-  cloudProvider:
-    name: gcp
   controllers:
   - spot-migrator
+  cloudProvider:
+    name: gcp
 serviceAccount:
   annotations:
     iam.gke.io/gcp-service-account: $GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS

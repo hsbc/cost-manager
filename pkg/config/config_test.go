@@ -14,7 +14,7 @@ func TestDecode(t *testing.T) {
 		valid      bool
 		config     *v1alpha1.CostManagerConfiguration
 	}{
-		"valid": {
+		"default": {
 			configData: []byte(`
 apiVersion: cost-manager.io/v1alpha1
 kind: CostManagerConfiguration

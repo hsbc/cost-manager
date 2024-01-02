@@ -47,6 +47,14 @@ func decode(configData []byte) (*v1alpha1.CostManagerConfiguration, error) {
 		return nil, fmt.Errorf("failed to decode configuration: %s", err)
 	}
 
+	// Verify that the API version and kind are what we expect
+	if config.APIVersion != v1alpha1.SchemeGroupVersion.String() {
+		return nil, fmt.Errorf("invalid API version: %s", config.APIVersion)
+	}
+	if config.Kind != "CostManagerConfiguration" {
+		return nil, fmt.Errorf("invalid kind: %s", config.Kind)
+	}
+
 	return config, nil
 }
 

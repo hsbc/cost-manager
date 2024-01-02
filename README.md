@@ -35,6 +35,23 @@ Standard](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clus
 supported. To allow spot-migrator to migrate workloads to spot VMs with fallback to on-demand VMs
 your cluster must be running at least one on-demand node pool and at least one spot node pool.
 
+### pod-safe-to-evict-annotator
+
+Certain [types of
+Pods](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node)
+can prevent the cluster autoscaler from removing a Node (e.g. Pods in the kube-system Namespace that
+do not have a PodDisruptionBudget) leading to more Nodes in the cluster than necessary. This can be
+particularly problematic for workloads that cluster operators are not in control of and can have a
+high number of replicas such as kube-dns or the [Konnectivity
+agent](https://kubernetes.io/docs/tasks/extend-kubernetes/setup-konnectivity/) which are typically
+installed by cloud providers.
+
+[pod-safe-to-evict-annotator](./pkg/controller/pod_safe_to_evict_annotator.go) adds the
+`cluster-autoscaler.kubernetes.io/safe-to-evict: "true"` annotation to all Pods that have not
+already been annotated to allow the cluster autoscaler to evict all Pods; workloads should be
+configured to expect this anyway and PodDisruptionBudgets can still be used to maintain desired
+levels of availability.
+
 ## Quickstart
 
 When using cost-manager on GCP, spot-migrator requires the

@@ -15,7 +15,7 @@ const (
 
 	// We copy the annotation key to avoid depending on the autoscaler respository:
 	// https://github.com/kubernetes/autoscaler/blob/389914758265a33e36683d6df7dbecf91de81802/cluster-autoscaler/utils/drain/drain.go#L33-L35
-	podSafeToEvictKey = "cluster-autoscaler.kubernetes.io/safe-to-evict"
+	podSafeToEvictAnnotationKey = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 )
 
 // podSafeToEvictAnnotator adds the `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`
@@ -47,12 +47,12 @@ func (r *podSafeToEvictAnnotator) Reconcile(ctx context.Context, request reconci
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
 	}
-	_, ok := pod.Annotations[podSafeToEvictKey]
+	_, ok := pod.Annotations[podSafeToEvictAnnotationKey]
 	if ok {
 		return reconcile.Result{}, nil
 	}
 	// https://github.com/kubernetes/autoscaler/blob/389914758265a33e36683d6df7dbecf91de81802/cluster-autoscaler/utils/drain/drain.go#L118-L121
-	pod.Annotations[podSafeToEvictKey] = "true"
+	pod.Annotations[podSafeToEvictAnnotationKey] = "true"
 
 	err = r.Client.Update(ctx, pod)
 	// If the Pod has been deleted or there was a conflict then we ignore the error since there must

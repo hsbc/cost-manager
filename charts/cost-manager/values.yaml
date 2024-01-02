@@ -4,7 +4,13 @@ image:
   repository: docker.io/dippynark/cost-manager
   tag: ""
 
-cloudProvider: gcp
+config:
+  apiVersion: cost-manager.io/v1alpha1
+  kind: CostManagerConfiguration
+  cloudProvider:
+    name: gcp
+  controllers:
+  - spot-migrator
 
 serviceAccount:
   annotations: {}

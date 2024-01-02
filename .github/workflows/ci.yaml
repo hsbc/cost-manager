@@ -87,7 +87,13 @@ jobs:
         image:
           pullPolicy: Never
           repository: "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
-        cloudProvider: fake
+        config:
+          apiVersion: cost-manager.io/v1alpha1
+          kind: CostManagerConfiguration
+          cloudProvider:
+            name: fake
+          controllers:
+          - spot-migrator
         serviceAccount:
           annotations:
             iam.gke.io/gcp-service-account: cost-manager@example.iam.gserviceaccount.com

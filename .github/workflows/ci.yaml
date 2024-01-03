@@ -127,6 +127,15 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+    # https://github.com/docker/metadata-action#basic
+    - name: Docker meta
+      uses: docker/metadata-action@v5
+      id: meta
+      with:
+        images: docker.io/dippynark/cost-manager
+      tags: |
+        # Set the latest tag for the main branch
+        type=raw,value=latest,enable={{is_default_branch}}
     # Buildx does not currently support pushing a previously built image so we rebuild from cache:
     # https://github.com/docker/buildx/issues/1915
     - name: Push Docker image
@@ -137,6 +146,7 @@ jobs:
       with:
         context: .
         platforms: linux/amd64
-        tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
+        tags: ${{ steps.meta.outputs.tags }}
+        # tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         cache-from: type=gha
         push: true

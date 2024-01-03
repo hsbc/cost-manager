@@ -26,9 +26,9 @@ taking into account the reduced cost of spot VMs. If an on-demand VM is added to
 spot-migrator assumes that there are currently no more spot VMs available and waits for the next
 migration attempt (currently every hour) however if no on-demand VMs were added then spot-migrator
 continues to drain on-demand VMs until there are no more left in the cluster (and all workloads are
-running on spot VMs). Node draining respects [Pod Disruption
-Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/) to ensure that workloads
-are migrated whilst maintaining desired levels of availability.
+running on spot VMs). Node draining respects
+[PodDisruptionBudgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/) to ensure
+that workloads are migrated whilst maintaining desired levels of availability.
 
 Currently only [GKE
 Standard](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clusters) clusters are

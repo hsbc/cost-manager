@@ -8,7 +8,9 @@ import (
 type CostManagerConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 	CloudProvider   CloudProvider `json:"cloudProvider"`
-	Controllers     []string      `json:"controllers,omitempty"`
+	// TODO(dippynark): Support all generic controller fields:
+	// https://github.com/kubernetes/controller-manager/blob/2a157ca0075be690e609881e5fdd3362cc62ecdc/config/v1alpha1/types.go#L24-L52
+	Controllers []string `json:"controllers,omitempty"`
 }
 
 type CloudProvider struct {

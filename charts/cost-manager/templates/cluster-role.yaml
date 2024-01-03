@@ -33,3 +33,13 @@ rules:
   verbs:
   - get
   - list
+# pod-safe-to-evict-annotator
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+  - update

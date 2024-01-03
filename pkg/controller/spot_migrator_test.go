@@ -319,7 +319,7 @@ func TestSpotMigratorPrometheusMetricRegistration(t *testing.T) {
 	cancel()
 
 	// Start spot-migrator
-	err := (&SpotMigrator{
+	err := (&spotMigrator{
 		Clientset: fake.NewSimpleClientset(),
 	}).Start(ctx)
 	require.Nil(t, err)
@@ -340,7 +340,7 @@ func TestSpotMigratorPrometheusMetricRegistration(t *testing.T) {
 func TestAnnotateNode(t *testing.T) {
 	ctx := context.Background()
 	clientset := fake.NewSimpleClientset()
-	sm := &SpotMigrator{
+	sm := &spotMigrator{
 		Clientset: clientset,
 	}
 	node, err := clientset.CoreV1().Nodes().Create(ctx, &corev1.Node{
@@ -414,7 +414,7 @@ func TestIsSelectedForDeletion(t *testing.T) {
 func TestExcludeNodeFromExternalLoadBalancing(t *testing.T) {
 	ctx := context.Background()
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "test"}}
-	sm := &SpotMigrator{
+	sm := &spotMigrator{
 		Clientset: fake.NewSimpleClientset(node),
 	}
 
@@ -510,7 +510,7 @@ func TestListOnDemandNodes(t *testing.T) {
 			for _, node := range test.nodes {
 				objects = append(objects, node)
 			}
-			sm := &SpotMigrator{
+			sm := &spotMigrator{
 				Clientset:     fake.NewSimpleClientset(objects...),
 				CloudProvider: &cloudproviderfake.CloudProvider{},
 			}

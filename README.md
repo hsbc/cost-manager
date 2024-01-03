@@ -6,7 +6,7 @@ reductions for the cluster they are running on.
 
 ## Controllers
 
-Here we provide details of the various controllers and how they work.
+Here we provide details of the various cost-manager controllers.
 
 ### spot-migrator
 
@@ -35,6 +35,39 @@ Standard](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clus
 supported. To allow spot-migrator to migrate workloads to spot VMs with fallback to on-demand VMs
 your cluster must be running at least one on-demand node pool and at least one spot node pool.
 
+```yaml
+apiVersion: cost-manager.io/v1alpha1
+kind: CostManagerConfiguration
+controllers:
+- spot-migrator
+cloudProvider:
+  name: gcp
+```
+
+### pod-safe-to-evict-annotator
+
+Certain [types of
+Pods](https://github.com/kubernetes/autoscaler/blob/bb72e46cb0697090683969c932a38afec9089978/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node)
+can prevent the cluster autoscaler from removing a Node (e.g. Pods in the kube-system Namespace that
+do not have a PodDisruptionBudget) leading to more Nodes in the cluster than necessary. This can be
+particularly problematic for workloads that cluster operators are not in control of and can have a
+high number of replicas, such as kube-dns or the [Konnectivity
+agent](https://kubernetes.io/docs/tasks/extend-kubernetes/setup-konnectivity/), which are typically
+installed by cloud providers.
+
+To allow the cluster autoscaler to evict all Pods that have not been explicitly marked as unsafe for
+eviction, [pod-safe-to-evict-annotator](./pkg/controller/pod_safe_to_evict_annotator.go) adds the
+`cluster-autoscaler.kubernetes.io/safe-to-evict: "true"` annotation to all Pods that have not
+already been annotated; note that PodDisruptionBudgets can still be used to maintain desired levels
+of availability.
+
+```yaml
+apiVersion: cost-manager.io/v1alpha1
+kind: CostManagerConfiguration
+controllers:
+- pod-safe-to-evict-annotator
+```
+
 ## Quickstart
 
 When using cost-manager on GCP, spot-migrator requires the
@@ -60,10 +93,10 @@ cat <<EOF > values.yaml
 config:
   apiVersion: cost-manager.io/v1alpha1
   kind: CostManagerConfiguration
-  cloudProvider:
-    name: gcp
   controllers:
   - spot-migrator
+  cloudProvider:
+    name: gcp
 serviceAccount:
   annotations:
     iam.gke.io/gcp-service-account: $GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS

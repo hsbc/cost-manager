@@ -7,10 +7,10 @@ image:
 config:
   apiVersion: cost-manager.io/v1alpha1
   kind: CostManagerConfiguration
-  cloudProvider:
-    name: gcp
   controllers:
   - spot-migrator
+  cloudProvider:
+    name: gcp
 
 serviceAccount:
   annotations: {}

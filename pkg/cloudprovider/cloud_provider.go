@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	fakeCloudProviderName = "fake"
-	gcpCloudProviderName  = "gcp"
+	FakeCloudProviderName = "fake"
+	GCPCloudProviderName  = "gcp"
 )
 
 // CloudProvider contains the functions for interacting with a cloud provider
@@ -30,9 +30,9 @@ type CloudProvider interface {
 // NewCloudProvider returns a new CloudProvider instance
 func NewCloudProvider(ctx context.Context, cloudProviderName string) (CloudProvider, error) {
 	switch cloudProviderName {
-	case fakeCloudProviderName:
+	case FakeCloudProviderName:
 		return &fake.CloudProvider{}, nil
-	case gcpCloudProviderName:
+	case GCPCloudProviderName:
 		return gcp.NewCloudProvider(ctx)
 	default:
 		return nil, fmt.Errorf("unknown cloud provider: %s", cloudProviderName)

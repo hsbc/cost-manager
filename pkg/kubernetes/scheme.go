@@ -3,7 +3,7 @@ package kubernetes
 import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/scale/scheme"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 // NewScheme creates a new scheme:

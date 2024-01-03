@@ -138,6 +138,8 @@ jobs:
           # Set the latest tag for the main branch:
           # https://github.com/docker/metadata-action?tab=readme-ov-file#latest-tag
           type=raw,value=latest,enable={{is_default_branch}}
+          # Set pr-[PR_NUMBER] tag for pull requests
+          type=ref,event=pr
     # Buildx does not currently support pushing a previously built image so we rebuild from cache:
     # https://github.com/docker/buildx/issues/1915
     - name: Push Docker image

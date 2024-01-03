@@ -147,14 +147,11 @@ jobs:
           type=ref,event=pr
           # Set the latest tag for the main branch:
           # https://github.com/docker/metadata-action#latest-tag
-          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
     # Buildx does not currently support pushing a previously built image so we rebuild from cache:
     # https://github.com/docker/buildx/issues/1915
     - name: Push Docker image
       uses: docker/build-push-action@v5
-      env:
-        # https://github.com/github/docs/issues/15319#issuecomment-1662257301
-        BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
       with:
         context: .
         platforms: linux/amd64

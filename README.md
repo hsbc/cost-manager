@@ -55,11 +55,11 @@ high number of replicas, such as kube-dns or the [Konnectivity
 agent](https://kubernetes.io/docs/tasks/extend-kubernetes/setup-konnectivity/), which are typically
 installed by cloud providers.
 
-[pod-safe-to-evict-annotator](./pkg/controller/pod_safe_to_evict_annotator.go) adds the
+To allow the cluster autoscaler to evict all Pods that have not been explicitly marked as unsafe for
+eviction, [pod-safe-to-evict-annotator](./pkg/controller/pod_safe_to_evict_annotator.go) adds the
 `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"` annotation to all Pods that have not
-already been annotated to allow the cluster autoscaler to evict all Pods; workloads should be
-configured to expect evictions at any time anyway and PodDisruptionBudgets can still be used to
-maintain desired levels of availability.
+already been annotated; note that PodDisruptionBudgets can still be used to maintain desired levels
+of availability.
 
 ```yaml
 apiVersion: cost-manager.io/v1alpha1

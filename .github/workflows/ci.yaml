@@ -138,6 +138,7 @@ jobs:
       id: meta
       with:
         images: docker.io/dippynark/cost-manager
+        flavor: latest=false
         tags: |
           # Push semantic version tags: https://github.com/docker/metadata-action#typesemver
           type=semver,pattern={{raw}}

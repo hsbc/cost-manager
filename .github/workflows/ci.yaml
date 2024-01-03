@@ -112,10 +112,10 @@ jobs:
         }
   release:
     # Make sure the tests have passed before releasing
-    # needs:
-    # - lint
-    # - test
-    # - build
+    needs:
+    - lint
+    - test
+    - build
     runs-on: ubuntu-latest
     # Do not release for forked repositories since secrets are not available:
     # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
@@ -146,7 +146,7 @@ jobs:
           # https://github.com/docker/metadata-action#typeref
           type=ref,event=pr
           # Set the latest tag for the main branch:
-          # https://github.com/docker/metadata-action?tab=readme-ov-file#latest-tag
+          # https://github.com/docker/metadata-action#latest-tag
           type=raw,value=latest,enable={{is_default_branch}}
     # Buildx does not currently support pushing a previously built image so we rebuild from cache:
     # https://github.com/docker/buildx/issues/1915
@@ -159,6 +159,5 @@ jobs:
         context: .
         platforms: linux/amd64
         tags: ${{ steps.meta.outputs.tags }}
-        # tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
         cache-from: type=gha
         push: true

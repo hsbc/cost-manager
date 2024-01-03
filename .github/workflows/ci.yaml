@@ -138,6 +138,9 @@ jobs:
       id: meta
       with:
         images: docker.io/dippynark/cost-manager
+        # Do not handle the latest tag by default. In particular this prevents the latest tag being
+        # pushed when the repository is tagged with a semantic version:
+        # https://github.com/docker/metadata-action#flavor-input
         flavor: latest=false
         tags: |
           # Push semantic version tags: https://github.com/docker/metadata-action#typesemver

@@ -4,6 +4,10 @@ on:
   push:
     branches:
     - main
+    tags:
+    # Match semantic version tags:
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#patterns-to-match-branches-and-tags
+    - v[0-9]+.[0-9]+.[0-9]+
   pull_request:
     branches:
     - main
@@ -50,6 +54,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
     # Build without pushing to first validate that the image works as expected:
     # https://docs.docker.com/build/ci/github-actions/test-before-push/
+    # TODO(dippynark): Configure Go build caching
     - name: Build Docker image
       uses: docker/build-push-action@v5
       id: docker-build
@@ -127,6 +132,22 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+    # https://github.com/docker/metadata-action#basic
+    - name: Docker meta
+      uses: docker/metadata-action@v5
+      id: meta
+      with:
+        images: docker.io/dippynark/cost-manager
+        tags: |
+          # Push semantic version tags: https://github.com/docker/metadata-action#typesemver
+          type=semver,pattern={{raw}}
+          # To make sure that we cannot accidentally push a semantic version tag from a pull request
+          # we only generate tags from the pull request number:
+          # https://github.com/docker/metadata-action#typeref
+          type=ref,event=pr
+          # Set the latest tag for the main branch:
+          # https://github.com/docker/metadata-action#latest-tag
+          type=raw,value=latest,enable={{is_default_branch}}
     # Buildx does not currently support pushing a previously built image so we rebuild from cache:
     # https://github.com/docker/buildx/issues/1915
     - name: Push Docker image
@@ -137,6 +158,6 @@ jobs:
       with:
         context: .
         platforms: linux/amd64
-        tags: docker.io/dippynark/cost-manager:${{ env.BRANCH == 'main' && 'latest' || env.BRANCH }}
+        tags: ${{ steps.meta.outputs.tags }}
         cache-from: type=gha
         push: true

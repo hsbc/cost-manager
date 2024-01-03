@@ -101,6 +101,7 @@ serviceAccount:
   annotations:
     iam.gke.io/gcp-service-account: $GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS
 EOF
+# Test comment
 helm template ./charts/cost-manager -n cost-manager -f values.yaml | kubectl apply -f -
 ```
 

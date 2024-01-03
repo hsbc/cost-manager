@@ -4,6 +4,10 @@ on:
   push:
     branches:
     - main
+    tags:
+    # Match semantic version tags:
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#patterns-to-match-branches-and-tags
+    - v[0-9]+.[0-9]+.[0-9]+
   pull_request:
     branches:
     - main
@@ -135,11 +139,15 @@ jobs:
       with:
         images: docker.io/dippynark/cost-manager
         tags: |
+          # Push semantic version tags: https://github.com/docker/metadata-action#typesemver
+          type=semver,pattern={{raw}}
+          # To make sure that we cannot accidentally push a semantic version tag from a pull request
+          # we only generate tags from the pull request number:
+          # https://github.com/docker/metadata-action#typeref
+          type=ref,event=pr
           # Set the latest tag for the main branch:
           # https://github.com/docker/metadata-action?tab=readme-ov-file#latest-tag
           type=raw,value=latest,enable={{is_default_branch}}
-          # Set pr-[PR_NUMBER] tag for pull requests
-          type=ref,event=pr
     # Buildx does not currently support pushing a previously built image so we rebuild from cache:
     # https://github.com/docker/buildx/issues/1915
     - name: Push Docker image

@@ -1,21 +1,17 @@
 # https://github.com/kubernetes-sigs/kubebuilder-release-tools#pr-verification-github-action
-name: PR Verifier
-
+name: pr
 on:
-  # NB: using `pull_request_target` runs this in the context of
-  # the base repository, so it has permission to upload to the checks API.
-  # This means changes won't kick in to this file until merged onto the
-  # main branch.
+  # pull_request_target runs in the context of the base of the pull request so changes won't take
+  # effect until this file is merged into the main branch:
+  # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target
   pull_request_target:
     types: [opened, edited, reopened, synchronize]
-
 jobs:
   verify:
     runs-on: ubuntu-latest
-    name: verify PR contents
+    name: verify
     steps:
     - name: Verifier action
-      id: verifier
       uses: kubernetes-sigs/kubebuilder-release-tools@v0.4.3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}

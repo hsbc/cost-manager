@@ -105,6 +105,7 @@ jobs:
         EOF
         helm template ./charts/cost-manager -n cost-manager -f values.yaml | kubectl apply -f -
         kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager || {
+          kubectl get nodes
           kubectl describe deployment/cost-manager -n cost-manager
           kubectl describe pod -n cost-manager -l app.kubernetes.io/name=cost-manager
           kubectl logs -n cost-manager -l app.kubernetes.io/name=cost-manager

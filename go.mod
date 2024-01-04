@@ -18,6 +18,7 @@ require (
 	knative.dev/pkg v0.0.0-20231102200604-fac3a4ffbc74
 	sigs.k8s.io/cluster-api-provider-gcp v1.5.0
 	sigs.k8s.io/controller-runtime v0.16.3
+	sigs.k8s.io/kubebuilder-release-tools/notes v0.3.0
 )
 
 require (

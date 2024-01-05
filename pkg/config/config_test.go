@@ -37,12 +37,12 @@ podSafeToEvictAnnotator:
 					APIVersion: "cost-manager.io/v1alpha1",
 					Kind:       "CostManagerConfiguration",
 				},
+				CloudProvider: v1alpha1.CloudProvider{
+					Name: "gcp",
+				},
 				Controllers: []string{
 					"spot-migrator",
 					"pod-safe-to-evict-annotator",
-				},
-				CloudProvider: v1alpha1.CloudProvider{
-					Name: "gcp",
 				},
 				PodSafeToEvictAnnotator: &v1alpha1.PodSafeToEvictAnnotator{
 					NamespaceSelector: &metav1.LabelSelector{

@@ -66,6 +66,13 @@ apiVersion: cost-manager.io/v1alpha1
 kind: CostManagerConfiguration
 controllers:
 - pod-safe-to-evict-annotator
+podSafeToEvictAnnotator:
+  namespaceSelector:
+    matchExpressions:
+    - key: kubernetes.io/metadata.name
+      operator: In
+      values:
+      - kube-system
 ```
 
 ## Installation

@@ -9,43 +9,43 @@ import (
 
 func TestMatchesLabels(t *testing.T) {
 	tests := map[string]struct {
-		selector *metav1.LabelSelector
-		labels   map[string]string
-		matches  bool
+		selector    *metav1.LabelSelector
+		labels      map[string]string
+		shouldMatch bool
 	}{
 		"nilSelectorNilLabels": {
-			selector: nil,
-			labels:   nil,
-			matches:  true,
+			selector:    nil,
+			labels:      nil,
+			shouldMatch: true,
 		},
 		"emptySelectorNilLabels": {
-			selector: &metav1.LabelSelector{},
-			labels:   nil,
-			matches:  true,
+			selector:    &metav1.LabelSelector{},
+			labels:      nil,
+			shouldMatch: true,
 		},
 		"nilSelectorEmptyLabels": {
-			selector: nil,
-			labels:   map[string]string{},
-			matches:  true,
+			selector:    nil,
+			labels:      map[string]string{},
+			shouldMatch: true,
 		},
 		"emptySelectorEmptyLabels": {
-			selector: &metav1.LabelSelector{},
-			labels:   map[string]string{},
-			matches:  true,
+			selector:    &metav1.LabelSelector{},
+			labels:      map[string]string{},
+			shouldMatch: true,
 		},
 		"nilSelectorNonEmptyLabels": {
 			selector: nil,
 			labels: map[string]string{
 				"kubernetes.io/metadata.name": "kube-system",
 			},
-			matches: true,
+			shouldMatch: true,
 		},
 		"emptySelectorNonEmptyLabels": {
 			selector: &metav1.LabelSelector{},
 			labels: map[string]string{
 				"kubernetes.io/metadata.name": "kube-system",
 			},
-			matches: true,
+			shouldMatch: true,
 		},
 		"nameSelectorDoesMatchNameLabel": {
 			selector: &metav1.LabelSelector{
@@ -62,7 +62,7 @@ func TestMatchesLabels(t *testing.T) {
 			labels: map[string]string{
 				"kubernetes.io/metadata.name": "kube-system",
 			},
-			matches: true,
+			shouldMatch: true,
 		},
 		"nameSelectorDoesNotMatchNameLabel": {
 			selector: &metav1.LabelSelector{
@@ -79,7 +79,7 @@ func TestMatchesLabels(t *testing.T) {
 			labels: map[string]string{
 				"kubernetes.io/metadata.name": "kube-public",
 			},
-			matches: false,
+			shouldMatch: false,
 		},
 		"nameSelectorDoesNotMatchNilLabels": {
 			selector: &metav1.LabelSelector{
@@ -93,8 +93,8 @@ func TestMatchesLabels(t *testing.T) {
 					},
 				},
 			},
-			labels:  nil,
-			matches: false,
+			labels:      nil,
+			shouldMatch: false,
 		},
 		"reverseNameSelectorDoesMatchNilLabels": {
 			selector: &metav1.LabelSelector{
@@ -108,15 +108,15 @@ func TestMatchesLabels(t *testing.T) {
 					},
 				},
 			},
-			labels:  nil,
-			matches: true,
+			labels:      nil,
+			shouldMatch: true,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			matches, err := SelectorMatchesLabels(test.selector, test.labels)
 			require.Nil(t, err)
-			require.Equal(t, test.matches, matches)
+			require.Equal(t, test.shouldMatch, matches)
 		})
 	}
 }

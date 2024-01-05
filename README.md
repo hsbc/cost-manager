@@ -68,40 +68,41 @@ controllers:
 - pod-safe-to-evict-annotator
 ```
 
-## Quickstart
+## Installation
 
-When using cost-manager on GCP, spot-migrator requires the
-[roles/compute.instanceAdmin](https://cloud.google.com/iam/docs/understanding-roles#compute.instanceAdmin)
-role to delete compute instances from GKE managed instance groups.
-
-cost-manager can be run locally:
+You can install cost-manager into a GKE cluster with [Workload
+Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) enabled as
+follows:
 
 ```sh
-# Generate Application Default Credentials with the roles/compute.instanceAdmin role
-# Generate kubeconfig for the target Kubernetes cluster
-make run
-```
-
-Alternatively, you can run cost-manager within a GKE cluster with [Workload
-Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) enabled:
-
-```sh
-kubectl create namespace cost-manager --dry-run=client -o yaml | kubectl apply -f -
+NAMESPACE="cost-manager"
+kubectl get namespace "$NAMESPACE" || kubectl create namespace "$NAMESPACE"
+LATEST_RELEASE_TAG="$(curl -s https://api.github.com/repos/hsbc/cost-manager/releases/latest | jq -r .tag_name)"
 # GCP service account bound to the roles/compute.instanceAdmin role
 GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS="cost-manager@example.iam.gserviceaccount.com"
 cat <<EOF > values.yaml
+image:
+  tag: $LATEST_RELEASE_TAG
 config:
   apiVersion: cost-manager.io/v1alpha1
   kind: CostManagerConfiguration
   controllers:
   - spot-migrator
+  - pod-safe-to-evict-annotator
   cloudProvider:
     name: gcp
+  podSafeToEvictAnnotator:
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - kube-system
 serviceAccount:
   annotations:
     iam.gke.io/gcp-service-account: $GCP_SERVICE_ACCOUNT_EMAIL_ADDRESS
 EOF
-helm template ./charts/cost-manager -n cost-manager -f values.yaml | kubectl apply -f -
+helm template ./charts/cost-manager -n "$NAMESPACE" -f values.yaml | kubectl apply -f -
 ```
 
 ## Contributing

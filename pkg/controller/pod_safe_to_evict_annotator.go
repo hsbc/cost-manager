@@ -3,8 +3,11 @@ package controller
 import (
 	"context"
 
+	"github.com/hsbc/cost-manager/pkg/api/v1alpha1"
+	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -23,6 +26,7 @@ const (
 // https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node
 type podSafeToEvictAnnotator struct {
 	Client client.Client
+	Config *v1alpha1.PodSafeToEvictAnnotator
 }
 
 var _ reconcile.Reconciler = &podSafeToEvictAnnotator{}
@@ -33,9 +37,27 @@ func (r *podSafeToEvictAnnotator) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *podSafeToEvictAnnotator) Reconcile(ctx context.Context, request reconcile.Request) (result reconcile.Result, rerr error) {
+func (r *podSafeToEvictAnnotator) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+	// We do nothing if the Namespace does not match the Namespace selector...
+	namespace := &corev1.Namespace{}
+	err := r.Client.Get(ctx, types.NamespacedName{Name: request.Namespace}, namespace)
+	if errors.IsNotFound(err) {
+		return reconcile.Result{}, nil
+	}
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	namespaceSelectorMatchesLabels, err := r.namespaceSelectorMatchesLabels(namespace)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if !namespaceSelectorMatchesLabels {
+		return reconcile.Result{}, nil
+	}
+
+	// ...otherwise we continue to process the Pod
 	pod := &corev1.Pod{}
-	err := r.Client.Get(ctx, request.NamespacedName, pod)
+	err = r.Client.Get(ctx, request.NamespacedName, pod)
 	if errors.IsNotFound(err) {
 		return reconcile.Result{}, nil
 	}
@@ -65,4 +87,13 @@ func (r *podSafeToEvictAnnotator) Reconcile(ctx context.Context, request reconci
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *podSafeToEvictAnnotator) namespaceSelectorMatchesLabels(namespace *corev1.Namespace) (bool, error) {
+	// If the Namespace selector is nil then we match all Namespaces...
+	if r.Config == nil || r.Config.NamespaceSelector == nil {
+		return true, nil
+	}
+	// ...otherwise we match the Namespace against the selector
+	return kubernetes.SelectorMatchesLabels(r.Config.NamespaceSelector, namespace.Labels)
 }

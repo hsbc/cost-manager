@@ -22,6 +22,14 @@ cloudProvider:
   name: gcp
 controllers:
 - spot-migrator
+- pod-safe-to-evict-annotator
+podSafeToEvictAnnotator:
+  namespaceSelector:
+    matchExpressions:
+    - key: kubernetes.io/metadata.name
+      operator: In
+      values:
+      - kube-system
 `),
 			valid: true,
 			config: &v1alpha1.CostManagerConfiguration{
@@ -32,7 +40,23 @@ controllers:
 				CloudProvider: v1alpha1.CloudProvider{
 					Name: "gcp",
 				},
-				Controllers: []string{"spot-migrator"},
+				Controllers: []string{
+					"spot-migrator",
+					"pod-safe-to-evict-annotator",
+				},
+				PodSafeToEvictAnnotator: &v1alpha1.PodSafeToEvictAnnotator{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "kubernetes.io/metadata.name",
+								Operator: "In",
+								Values: []string{
+									"kube-system",
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		"noFields": {

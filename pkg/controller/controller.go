@@ -51,6 +51,7 @@ func SetupWithManager(ctx context.Context, mgr ctrl.Manager, config *v1alpha1.Co
 			case podSafeToEvictAnnotatorControllerName:
 				err := (&podSafeToEvictAnnotator{
 					Client: mgr.GetClient(),
+					Config: config.PodSafeToEvictAnnotator,
 				}).SetupWithManager(mgr)
 				if err != nil {
 					return errors.Wrapf(err, "failed to setup %s", podSafeToEvictAnnotatorControllerName)

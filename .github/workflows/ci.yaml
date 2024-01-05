@@ -92,6 +92,7 @@ jobs:
         image:
           pullPolicy: Never
           repository: "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
+          tag: ""
         config:
           apiVersion: cost-manager.io/v1alpha1
           kind: CostManagerConfiguration

@@ -1,0 +1,14 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cost-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  groups:
+  - name: CostManager
+    rules:
+    - alert: CostManagerDown
+      expr: up{job="cost-manager"} == 0
+      for: 10m
+{{- end }}

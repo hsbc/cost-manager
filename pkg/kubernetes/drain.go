@@ -75,7 +75,7 @@ func WaitForNodeToBeDeleted(ctx context.Context, clientset kubernetes.Interface,
 		},
 	}
 	condition := func(event apiwatch.Event) (bool, error) {
-		node, err := parseWatchEventObject[*corev1.Node](event)
+		node, err := ParseWatchEventObject[*corev1.Node](event)
 		if err != nil {
 			return false, err
 		}

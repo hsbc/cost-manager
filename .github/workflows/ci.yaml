@@ -42,12 +42,6 @@ jobs:
     - run: go mod download
     - run: make verify
     - run: make test
-    - run: make build
-  # https://docs.docker.com/build/ci/github-actions/multi-platform/
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx
@@ -67,63 +61,22 @@ jobs:
         # Export to Docker so we can load into kind cluster:
         # https://docs.docker.com/build/ci/github-actions/export-docker/
         load: true
-    - name: Install kind
-      uses: helm/kind-action@v1.8.0
-      with:
-        install_only: true
-    - name: Load image into kind cluster
-      run: kind load docker-image "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
     - name: Setup Helm
       uses: azure/setup-helm@v3
       with:
         version: v3.12.1
     - name: Helm lint
       run: helm lint --strict ./charts/cost-manager
-    - name: Install CRDs
-      run: |
-        kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
-        kubectl apply -f https://raw.githubusercontent.com/prometheus-community/helm-charts/d616961860a0248f77a2783923511550fad23569/charts/kube-prometheus-stack/charts/crds/crds/crd-prometheusrules.yaml
-        kubectl apply -f https://raw.githubusercontent.com/prometheus-community/helm-charts/d616961860a0248f77a2783923511550fad23569/charts/kube-prometheus-stack/charts/crds/crds/crd-podmonitors.yaml
-    - name: Install cost-manager
-      # Use bash shell to set pipefail option:
-      # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
-      shell: bash
-      run: |
-        kubectl create namespace cost-manager
-        cat <<EOF > values.yaml
-        image:
-          pullPolicy: Never
-          repository: "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
-          tag: ""
-        config:
-          apiVersion: cost-manager.io/v1alpha1
-          kind: CostManagerConfiguration
-          cloudProvider:
-            name: fake
-        serviceAccount:
-          annotations:
-            iam.gke.io/gcp-service-account: cost-manager@example.iam.gserviceaccount.com
-        vpa:
-          enabled: true
-        prometheusRule:
-          enabled: true
-        podMonitor:
-          enabled: true
-        EOF
-        helm template ./charts/cost-manager -n cost-manager -f values.yaml | kubectl apply -f -
-        kubectl wait --for=condition=Available=true deployment/cost-manager -n cost-manager || {
-          kubectl get nodes
-          kubectl describe deployment/cost-manager -n cost-manager
-          kubectl describe pod -n cost-manager -l app.kubernetes.io/name=cost-manager
-          kubectl logs -n cost-manager -l app.kubernetes.io/name=cost-manager
-          exit 1
-        }
+    - name: Install kind
+      uses: helm/kind-action@v1.8.0
+      with:
+        install_only: true
+    - run: make e2e IMAGE=${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}
   release:
     # Make sure the tests have passed before releasing
     needs:
     - lint
     - test
-    - build
     runs-on: ubuntu-latest
     # Do not release for forked repositories since secrets are not available:
     # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow

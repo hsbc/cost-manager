@@ -83,10 +83,43 @@ func deleteKindCluster() error {
 	return runCommand("kind", "delete", "cluster", "--name", kindClusterName)
 }
 
-func installCostManager() error {
+func installCostManager() (rerr error) {
+	// Create temporary file to store Helm values
+	f, err := os.CreateTemp("", "cost-manager-values-*.yaml")
+	if err != nil {
+		return err
+	}
+	// Always remove temporary file
+	defer func() {
+		err := os.Remove(f.Name())
+		if rerr == nil {
+			rerr = err
+		}
+	}()
+	_, err = f.WriteString(`
+image:
+  tag: $LATEST_RELEASE_TAG
+config:
+  apiVersion: cost-manager.io/v1alpha1
+  kind: CostManagerConfiguration
+  controllers:
+  - pod-safe-to-evict-annotator
+  podSafeToEvictAnnotator:
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - kube-system
+`)
+	if err != nil {
+		return err
+	}
+
 	return runCommand("helm", "upgrade", "--install",
 		"cost-manager", "../../charts/cost-manager",
 		"--namespace", "cost-manager", "--create-namespace",
+		"--values", f.Name(),
 		"--wait", "--timeout", "2m")
 }
 

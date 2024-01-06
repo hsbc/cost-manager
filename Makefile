@@ -3,6 +3,9 @@ BIN_DIR = ./bin
 test:
 	go test -race ./...
 
+e2e:
+	go test -race --shuffle=on -v ./test/e2e
+
 build:
 	go build -o $(BIN_DIR)/cost-manager
 

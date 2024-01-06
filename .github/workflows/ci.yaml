@@ -68,10 +68,10 @@ jobs:
         # Export to Docker so we can load into kind cluster:
         # https://docs.docker.com/build/ci/github-actions/export-docker/
         load: true
-    - name: Create kind cluster
+    - name: Install kind
       uses: helm/kind-action@v1.8.0
       with:
-        cluster_name: kind
+        install_only: true
     - name: Load image into kind cluster
       run: kind load docker-image "${{ fromJSON(steps.docker-build.outputs.metadata)['image.name'] }}"
     - name: Setup Helm

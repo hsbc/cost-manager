@@ -114,7 +114,7 @@ helm template ./charts/cost-manager -n "$NAMESPACE" -f values.yaml | kubectl app
 
 ## Testing
 
-Build local image and run E2E tests using [kind](https://github.com/kubernetes-sigs/kind):
+Build Docker image and run E2E tests using [kind](https://github.com/kubernetes-sigs/kind):
 
 ```sh
 make image e2e

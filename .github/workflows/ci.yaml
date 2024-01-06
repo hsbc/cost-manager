@@ -50,7 +50,6 @@ jobs:
       uses: docker/setup-buildx-action@v3
     # Build without pushing to first validate that the image works as expected:
     # https://docs.docker.com/build/ci/github-actions/test-before-push/
-    # TODO(dippynark): Configure Go build caching
     - name: Build Docker image
       uses: docker/build-push-action@v5
       id: docker-build

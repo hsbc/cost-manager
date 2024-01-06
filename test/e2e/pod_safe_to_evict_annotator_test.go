@@ -41,11 +41,11 @@ func allPodsHaveExpectedSafeToEvictAnnotation(ctx context.Context, kubeClient cl
 		return false, err
 	}
 	for _, pod := range podList.Items {
-		// kube-system Pods should have the annotation
+		// kube-system Pods should have the annotation...
 		if pod.Namespace == "kube-system" && !hasSafeToEvictAnnotation(&pod) {
 			return false, nil
 		}
-		// Non kube-system Pods should not have the annotation
+		// ...all other Pods should not have the annotation
 		if pod.Namespace != "kube-system" && hasSafeToEvictAnnotation(&pod) {
 			return false, nil
 		}

@@ -97,15 +97,6 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	return nil
 }
 
-func teardown() error {
-	err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func installCostManager(ctx context.Context, image, helmChartPath string) (rerr error) {
 	// Create temporary file to store Helm values
 	valuesFile, err := os.CreateTemp("", "cost-manager-values-*.yaml")
@@ -168,6 +159,15 @@ podMonitor:
 		return err
 	}
 	return kubernetes.WaitUntilDeploymentAvailable(ctx, kubeClient, "cost-manager", "cost-manager")
+}
+
+func teardown() error {
+	err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func printDebugInformation() error {

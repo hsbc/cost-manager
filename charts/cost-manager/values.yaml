@@ -23,6 +23,10 @@ vpa:
 
 prometheusRule:
   enabled: false
+  groups:
+    rules:
+      labels: {}
+      annotations: {}
 
 podMonitor:
   enabled: false

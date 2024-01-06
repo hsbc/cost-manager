@@ -41,7 +41,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	// Print debug information
+	// If the E2E tests failed then we print some debug information
 	if code > 0 {
 		err := printDebugInformation()
 		if err != nil {
@@ -108,18 +108,19 @@ func teardown() error {
 
 func installCostManager(ctx context.Context, image, helmChartPath string) (rerr error) {
 	// Create temporary file to store Helm values
-	f, err := os.CreateTemp("", "cost-manager-values-*.yaml")
+	valuesFile, err := os.CreateTemp("", "cost-manager-values-*.yaml")
 	if err != nil {
 		return err
 	}
-	// Always remove temporary file
 	defer func() {
 		err := os.Remove(f.Name())
 		if rerr == nil {
 			rerr = err
 		}
 	}()
-	_, err = f.WriteString(fmt.Sprintf(`
+
+	// Write Helm values
+	_, err = valuesFile.WriteString(fmt.Sprintf(`
 image:
   repository: %s
   tag: ""
@@ -155,7 +156,7 @@ podMonitor:
 	err = runCommand("helm", "upgrade", "--install",
 		"cost-manager", helmChartPath,
 		"--namespace", "cost-manager", "--create-namespace",
-		"--values", f.Name(),
+		"--values", valuesFile.Name(),
 		"--wait", "--timeout", "2m")
 	if err != nil {
 		return err

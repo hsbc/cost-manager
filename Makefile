@@ -7,9 +7,6 @@ test:
 build:
 	go build -o $(BIN_DIR)/cost-manager
 
-run: build
-	$(BIN_DIR)/cost-manager --config ./hack/config.yaml
-
 e2e:
 	go test ./test/e2e --test.image=$(IMAGE) --shuffle=on -race -v
 

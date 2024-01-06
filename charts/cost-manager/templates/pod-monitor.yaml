@@ -1,0 +1,14 @@
+{{- if .Values.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cost-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cost-manager
+  podMetricsEndpoints:
+  - port: metrics
+{{- end }}

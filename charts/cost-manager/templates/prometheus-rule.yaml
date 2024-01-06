@@ -9,6 +9,36 @@ spec:
   - name: CostManager
     rules:
     - alert: CostManagerDown
-      expr: up{job="cost-manager"} == 0
+      expr: absent(up{job="cost-manager", namespace="{{ .Release.Namespace }}"} == 1)
       for: 10m
+{{- if .Values.prometheusRule.labels }}
+      labels:
+{{ .Values.prometheusRule.labels | toYaml | indent 8 }}
+{{- end }}
+{{- if .Values.prometheusRule.annotations }}
+      annotations:
+{{ .Values.prometheusRule.annotations | toYaml | indent 8 }}
+{{- end }}
+    - alert: CostManagerReconciliationFailing
+      expr: sum(rate(controller_runtime_reconcile_errors_total{job="cost-manager", namespace="{{ .Release.Namespace }}"}[5m])) > 0
+      for: 10m
+{{- if .Values.prometheusRule.labels }}
+      labels:
+{{ .Values.prometheusRule.labels | toYaml | indent 8 }}
+{{- end }}
+{{- if .Values.prometheusRule.annotations }}
+      annotations:
+{{ .Values.prometheusRule.annotations | toYaml | indent 8 }}
+{{- end }}
+    - alert: CostManagerSpotMigratorFailing
+      expr: sum(rate(cost_manager_spot_migrator_operation_success_total{job="cost-manager", namespace="{{ .Release.Namespace }}"}[2h])) == 0
+      for: 2h
+{{- if .Values.prometheusRule.labels }}
+      labels:
+{{ .Values.prometheusRule.labels | toYaml | indent 8 }}
+{{- end }}
+{{- if .Values.prometheusRule.annotations }}
+      annotations:
+{{ .Values.prometheusRule.annotations | toYaml | indent 8 }}
+{{- end }}
 {{- end }}

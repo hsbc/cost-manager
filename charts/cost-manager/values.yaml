@@ -23,3 +23,6 @@ vpa:
 
 prometheusRule:
   enabled: false
+
+podMonitor:
+  enabled: false

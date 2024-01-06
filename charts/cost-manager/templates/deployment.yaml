@@ -38,6 +38,9 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        ports:
+        - name: metrics
+          containerPort: 8080
         securityContext:
           seccompProfile:
             type: RuntimeDefault

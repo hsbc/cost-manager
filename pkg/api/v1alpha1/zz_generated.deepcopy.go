@@ -46,12 +46,12 @@ func (in *CloudProvider) DeepCopy() *CloudProvider {
 func (in *CostManagerConfiguration) DeepCopyInto(out *CostManagerConfiguration) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.CloudProvider = in.CloudProvider
 	if in.Controllers != nil {
 		in, out := &in.Controllers, &out.Controllers
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	out.CloudProvider = in.CloudProvider
 	if in.PodSafeToEvictAnnotator != nil {
 		in, out := &in.PodSafeToEvictAnnotator, &out.PodSafeToEvictAnnotator
 		*out = new(PodSafeToEvictAnnotator)

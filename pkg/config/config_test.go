@@ -18,11 +18,11 @@ func TestDecode(t *testing.T) {
 			configData: []byte(`
 apiVersion: cost-manager.io/v1alpha1
 kind: CostManagerConfiguration
-cloudProvider:
-  name: gcp
 controllers:
 - spot-migrator
 - pod-safe-to-evict-annotator
+cloudProvider:
+  name: gcp
 podSafeToEvictAnnotator:
   namespaceSelector:
     matchExpressions:
@@ -37,12 +37,12 @@ podSafeToEvictAnnotator:
 					APIVersion: "cost-manager.io/v1alpha1",
 					Kind:       "CostManagerConfiguration",
 				},
-				CloudProvider: v1alpha1.CloudProvider{
-					Name: "gcp",
-				},
 				Controllers: []string{
 					"spot-migrator",
 					"pod-safe-to-evict-annotator",
+				},
+				CloudProvider: v1alpha1.CloudProvider{
+					Name: "gcp",
 				},
 				PodSafeToEvictAnnotator: &v1alpha1.PodSafeToEvictAnnotator{
 					NamespaceSelector: &metav1.LabelSelector{

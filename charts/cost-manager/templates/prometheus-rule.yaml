@@ -1,0 +1,47 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cost-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  groups:
+  - name: CostManager
+    rules:
+    - alert: CostManagerDown
+      expr: absent(up{job="cost-manager", namespace="{{ .Release.Namespace }}"} == 1)
+      for: 10m
+{{- if .Values.prometheusRule.groups.rules.labels }}
+      labels:
+{{ .Values.prometheusRule.groups.rules.labels | toYaml | indent 8 }}
+{{- end }}
+      annotations:
+        message: cost-manager is not running or has been missing metrics for more than 10 minutes
+{{- if .Values.prometheusRule.groups.rules.annotations }}
+{{ .Values.prometheusRule.groups.rules.annotations | toYaml | indent 8 }}
+{{- end }}
+    - alert: CostManagerReconciliationErrors
+      expr: sum(rate(controller_runtime_reconcile_errors_total{job="cost-manager", namespace="{{ .Release.Namespace }}"}[5m])) > 0
+      for: 10m
+{{- if .Values.prometheusRule.groups.rules.labels }}
+      labels:
+{{ .Values.prometheusRule.groups.rules.labels | toYaml | indent 8 }}
+{{- end }}
+      annotations:
+        message: cost-manager has had reconciliation errors for more than 10 minutes
+{{- if .Values.prometheusRule.groups.rules.annotations }}
+{{ .Values.prometheusRule.groups.rules.annotations | toYaml | indent 8 }}
+{{- end }}
+    - alert: CostManagerSpotMigratorFailing
+      expr: sum(rate(cost_manager_spot_migrator_operation_success_total{job="cost-manager", namespace="{{ .Release.Namespace }}"}[2h])) == 0
+      for: 2h
+{{- if .Values.prometheusRule.groups.rules.labels }}
+      labels:
+{{ .Values.prometheusRule.groups.rules.labels | toYaml | indent 8 }}
+{{- end }}
+      annotations:
+        message: cost-manager spot-migrator has been failing to run for more than 2 hours
+{{- if .Values.prometheusRule.groups.rules.annotations }}
+{{ .Values.prometheusRule.groups.rules.annotations | toYaml | indent 8 }}
+{{- end }}
+{{- end }}

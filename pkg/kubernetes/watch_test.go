@@ -19,7 +19,7 @@ func TestParseWatchEventPodObject(t *testing.T) {
 			},
 		},
 	}
-	pod, err := parseWatchEventObject[*corev1.Pod](event)
+	pod, err := ParseWatchEventObject[*corev1.Pod](event)
 	require.Nil(t, err)
 	require.Equal(t, "foo", pod.ObjectMeta.Name)
 	require.Equal(t, "bar", pod.ObjectMeta.Namespace)
@@ -32,7 +32,7 @@ func TestParseWatchEventErrorObject(t *testing.T) {
 			Message: "message",
 		},
 	}
-	_, err := parseWatchEventObject[*corev1.Pod](event)
+	_, err := ParseWatchEventObject[*corev1.Pod](event)
 	require.NotNil(t, err)
 	require.Equal(t, "watch failed with error: message", err.Error())
 }

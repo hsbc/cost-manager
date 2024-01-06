@@ -1,6 +1,8 @@
 .dockerignore
 Dockerfile
 
+Makefile
+
 .git/
 .gitignore
 .github/
@@ -11,3 +13,5 @@ LICENSE
 README.md
 
 charts/
+
+test/

@@ -1,17 +1,12 @@
 image:
-  pullPolicy: IfNotPresent
   # TODO(dippynark): Use HSBC Docker Hub repository
   repository: docker.io/dippynark/cost-manager
   tag: latest
+  pullPolicy: IfNotPresent
 
 config:
   apiVersion: cost-manager.io/v1alpha1
   kind: CostManagerConfiguration
-  controllers:
-  - spot-migrator
-  - pod-safe-to-evict-annotator
-  cloudProvider:
-    name: gcp
 
 serviceAccount:
   annotations: {}

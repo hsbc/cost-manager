@@ -10,7 +10,7 @@ build:
 run: build
 	$(BIN_DIR)/cost-manager --config ./hack/config.yaml
 
-e2e: image
+e2e:
 	go test ./test/e2e --test.image=$(IMAGE) --shuffle=on -race -v
 
 image:

@@ -112,6 +112,14 @@ EOF
 helm template ./charts/cost-manager -n "$NAMESPACE" -f values.yaml | kubectl apply -f -
 ```
 
+## Testing
+
+Build local image and run E2E tests using [kind](https://github.com/kubernetes-sigs/kind):
+
+```sh
+make image e2e
+```
+
 ## Contributing
 
 Contributions are greatly appreciated. The project follows the typical GitHub pull request model.

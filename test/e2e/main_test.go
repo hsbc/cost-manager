@@ -113,7 +113,7 @@ func installCostManager(ctx context.Context, image, helmChartPath string) (rerr 
 		return err
 	}
 	defer func() {
-		err := os.Remove(f.Name())
+		err := os.Remove(valuesFile.Name())
 		if rerr == nil {
 			rerr = err
 		}

@@ -62,7 +62,6 @@ jobs:
         context: .
         platforms: linux/amd64
         tags: docker.io/dippynark/cost-manager:test
-        # https://docs.docker.com/build/ci/github-actions/cache/#github-cache
         cache-from: type=gha
         cache-to: type=gha,mode=max
         # Export to Docker so we can load into kind cluster:
@@ -167,7 +166,11 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        platforms: linux/amd64
+        # We do not build the ARM64 image for pull requests since it takes a very long time:
+        # https://github.com/docker/setup-qemu-action/issues/22
+        # https://github.com/DSpace/DSpace/pull/8315
+        platforms: linux/amd64${{ github.event_name != 'pull_request' && ',linux/arm64' || '' }}
         tags: ${{ steps.meta.outputs.tags }}
         cache-from: type=gha
+        cache-to: type=gha,mode=max
         push: true

@@ -33,6 +33,14 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
         - --config=/config/config.yaml
+        env:
+        # Add Node name environment variable to allow spot-migrator to identify the Node it is
+        # running on and reduce the chance of draining itself:
+        # https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/#use-pod-fields-as-values-for-environment-variables
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         resources:
           requests:
             cpu: 10m

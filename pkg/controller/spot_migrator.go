@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -69,8 +70,11 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 	// Register Prometheus metrics
 	metrics.Registry.MustRegister(spotMigratorOperationSuccessTotal)
 
-	// If spot-migrator drains itself then any ongoing migration operations will be cancelled so we
-	// begin by draining and deleting any Nodes that have previously been selected for deletion
+	// If spot-migrator drains itself then any ongoing migration operations will be cancelled. To
+	// mitigate this we begin by draining and deleting any Nodes that have previously been selected
+	// for deletion. Note that we do not run a full migration in this case because otherwise we
+	// could get stuck in a continuous loop of draining and deleting the Node that spot-migrator is
+	// running on; we will need to wait for the next schedule time for the migration to continue
 	onDemandNodes, err := sm.listOnDemandNodes(ctx)
 	if err != nil {
 		return err
@@ -303,8 +307,9 @@ func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context
 // selectNodeForDeletion attempts the find the best Node to delete using the following algorithm:
 // 1. If there are any Nodes that have previously been selected for deletion then return the oldest
 // 2. Otherwise if there are any unschedulable Nodes then return the oldest
-// 3. Otherwise if there are any schedulable Nodes marked for deletion by the cluster-autoscaler then return the oldest
-// 4. Otherwise return the oldest schedulable Node
+// 3. Otherwise if there are any Nodes marked for deletion by the cluster-autoscaler then return the oldest
+// 4. Otherwise if there are any Nodes that are not running spot-migrator then return the oldest
+// 5. Otherwise return the oldest Node
 func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.Node, error) {
 	// There should always be at least 1 Node to select from
 	if len(nodes) == 0 {
@@ -318,7 +323,8 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 		return iTime.Before(jTime)
 	})
 
-	// If any Nodes have previously been selected for deletion then return the first one
+	// If any Nodes have previously been selected for deletion then return the first one. Note that
+	// all such Nodes should have already been drained and deleted when spot-migrator started up
 	for _, node := range nodes {
 		if isSelectedForDeletion(node) {
 			return node, nil
@@ -352,6 +358,19 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 			if taint.Key == deletionCandidateTaint && taint.Effect == corev1.TaintEffectPreferNoSchedule {
 				return node, nil
 			}
+		}
+	}
+
+	// If any Nodes are not running spot-migrator then we return the first one; this reduces the
+	// chance of spot-migrator draining itself and cancelling an ongoing migration operation. Note
+	// that there is very small possibility that the Node that spot-migrator is running on is the
+	// only on-demand Node remaining in the cluster that could be drained to trigger the addition of
+	// a new spot Node (e.g. if all other on-demand Nodes are running Pods that cannot be scheduled
+	// to spot Nodes) however this seems like the lesser evil compared to potentially repeatedly
+	// cancelling migration operations
+	for _, node := range nodes {
+		if node.Name != os.Getenv("NODE_NAME") {
+			return node, nil
 		}
 	}
 

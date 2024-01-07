@@ -46,11 +46,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: %s
+      app.kubernetes.io/name: %s
   template:
     metadata:
       labels:
-        app: %s
+        app.kubernetes.io/name: %s
     spec:
       terminationGracePeriodSeconds: 1
       containers:

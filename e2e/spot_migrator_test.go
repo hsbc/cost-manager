@@ -47,8 +47,19 @@ func TestSpotMigrator(t *testing.T) {
 
 	// Deploy a workload to the worker Node
 	namespaceName := test.GenerateResourceName(t)
-	err = kubeClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}})
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
+	err = kubeClient.Create(ctx, namespace)
 	require.Nil(t, err)
+	deploymentName := namespaceName
+	deployment, err := test.GenerateDeployment(namespaceName, deploymentName)
+	require.Nil(t, err)
+	t.Logf("Waiting for Deployment %s/%s to become available...", deployment.Namespace, deployment.Name)
+	deployment.Spec.Template.Spec.NodeSelector = map[string]string{"kubernetes.io/hostname": nodeName}
+	err = kubeClient.Create(ctx, deployment)
+	require.Nil(t, err)
+	err = kubernetes.WaitUntilDeploymentAvailable(ctx, kubeClient, namespaceName, deploymentName)
+	require.Nil(t, err)
+	t.Logf("Deployment %s/%s is available!", deployment.Namespace, deployment.Name)
 
 	// Label worker Node as an on-demand Node to give spot-migrator something to drain
 	node := &corev1.Node{}
@@ -59,7 +70,7 @@ func TestSpotMigrator(t *testing.T) {
 	require.Nil(t, err)
 
 	// Wait for the Node to be marked as unschedulable
-	t.Logf("Waiting for Node %s to be marked as unschedulable", nodeName)
+	t.Logf("Waiting for Node %s to be marked as unschedulable...", nodeName)
 	listerWatcher := kubernetes.NewListerWatcher(ctx, kubeClient, &corev1.NodeList{})
 	condition := func(event apiwatch.Event) (bool, error) {
 		node, err := kubernetes.ParseWatchEventObject[*corev1.Node](event)
@@ -71,6 +82,12 @@ func TestSpotMigrator(t *testing.T) {
 	_, err = watch.UntilWithSync(ctx, listerWatcher, &corev1.Node{}, nil, condition)
 	require.Nil(t, err)
 	t.Logf("Node %s marked as unschedulable!", nodeName)
+
+	// Wait for the Deployment to become unavailable
+	t.Logf("Waiting for Deployment %s/%s to become unavailable...", deployment.Namespace, deployment.Name)
+	err = kubernetes.WaitUntilDeploymentUnavailable(ctx, kubeClient, namespaceName, deploymentName)
+	require.Nil(t, err)
+	t.Logf("Deployment %s/%s is unavailable!", deployment.Namespace, deployment.Name)
 
 	// Verify that all control plane Nodes are schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
@@ -85,8 +102,12 @@ func TestSpotMigrator(t *testing.T) {
 	nodeList = &corev1.NodeList{}
 	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: controlPlaneNodeSelector})
 	require.Nil(t, err)
-	require.Greater(t, nodeList.Items, 0)
+	require.Greater(t, len(nodeList.Items), 0)
 	for _, node := range nodeList.Items {
 		require.False(t, node.Spec.Unschedulable)
 	}
+
+	// Delete Namespace
+	err = kubeClient.Delete(ctx, namespace)
+	require.Nil(t, err)
 }

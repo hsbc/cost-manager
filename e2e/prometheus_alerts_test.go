@@ -45,7 +45,6 @@ func TestPrometheusAlerts(t *testing.T) {
 	require.Nil(t, err)
 	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
 
-	// Wait for all cost-manager alerts to be registered with Prometheus
 	t.Log("Waiting for cost-manager alerts to be registered with Prometheus...")
 	costManagerPrometheusRule := &monitoringv1.PrometheusRule{}
 	err = kubeClient.Get(ctx, client.ObjectKey{Name: "cost-manager", Namespace: "cost-manager"}, costManagerPrometheusRule)

@@ -27,3 +27,7 @@ func TestGenerateLongResourceNameTruncatedTo62CharactersXxxX(t *testing.T) {
 	expected := "test-generate-long-resource-name-truncated-to62-characters-xxx"
 	require.Equal(t, expected, actual)
 }
+func TestGenerateDeployment(t *testing.T) {
+	_, err := GenerateDeployment("test", "test")
+	require.Nil(t, err)
+}

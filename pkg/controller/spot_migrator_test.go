@@ -8,7 +8,6 @@ import (
 
 	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/robfig/cron.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -345,16 +344,16 @@ func TestSpotMigratorSelectNodeForDeletionPreferSelectedForDeletion(t *testing.T
 	require.True(t, isSelectedForDeletion(node))
 }
 
-// TestCronSpecHasFixedActivationTimes ensures that the cron spec does not return activation times
-// that are a fixed amount of time ahead of the given time; otherwise, spot migration will never run
-// if cost-manager is restarting more regularly than the activation interval. For example, using
-// `@every 1h` for the cron spec would fail this test
-func TestSpotMigratorCronSpecHasFixedActivationTimes(t *testing.T) {
-	cronSchedule, err := cron.Parse(cronSpec)
+// TestSpotMigratorDefaultMigrationScheduleHasFixedActivationTimes ensures that the default
+// migration schedule does not return activation times that are a fixed amount of time ahead of the
+// given time; otherwise, spot migration will never run if cost-manager is restarting more regularly
+// than the activation interval. For example, `@every 1h` would fail this test
+func TestSpotMigratorDefaultMigrationScheduleHasFixedActivationTimes(t *testing.T) {
+	parsedMigrationSchedule, err := parseMigrationSchedule(defaultMigrationSchedule)
 	require.Nil(t, err)
 
 	testTime := time.Date(00, 00, 00, 00, 00, 00, 00, time.UTC)
-	require.Equal(t, cronSchedule.Next(testTime), cronSchedule.Next(testTime.Add(time.Second)))
+	require.Equal(t, parsedMigrationSchedule.Next(testTime), parsedMigrationSchedule.Next(testTime.Add(time.Second)))
 }
 
 func TestSpotMigratorPrometheusMetricRegistration(t *testing.T) {

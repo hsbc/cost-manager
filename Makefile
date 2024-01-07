@@ -2,13 +2,14 @@ IMAGE = cost-manager
 BIN_DIR = ./bin
 
 test:
-	go test ./... -race
+	go test $(shell go list ./... | grep -v github.com/hsbc/cost-manager/e2e) -race
 
 build:
 	go build -o $(BIN_DIR)/cost-manager
 
+.PHONY: e2e
 e2e:
-	go test ./test/e2e --test.image=$(IMAGE) --shuffle=on -race -v
+	go test ./e2e --test.image=$(IMAGE) --shuffle=on -race -v
 
 image:
 	docker build -t $(IMAGE) .

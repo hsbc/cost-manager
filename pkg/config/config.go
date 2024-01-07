@@ -59,6 +59,7 @@ func decode(configData []byte) (*v1alpha1.CostManagerConfiguration, error) {
 }
 
 func validate(config *v1alpha1.CostManagerConfiguration) error {
+	// Ensure that all enabled controllers are known
 	for _, controllerName := range config.Controllers {
 		if !slices.Contains(controller.AllControllerNames, controllerName) {
 			return fmt.Errorf("unknown controller: %s", controllerName)

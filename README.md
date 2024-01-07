@@ -42,6 +42,8 @@ controllers:
 - spot-migrator
 cloudProvider:
   name: gcp
+spotMigrator:
+  migrationSchedule: "* * * * *"
 ```
 
 ### pod-safe-to-evict-annotator

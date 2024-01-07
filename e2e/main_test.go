@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 
 	// Parse flags
 	image := flag.String("test.image", "cost-manager", "Local Docker image to test")
-	helmChartPath := flag.String("test.helm-chart-path", "../../charts/cost-manager", "Path to Helm chart")
+	helmChartPath := flag.String("test.helm-chart-path", "../charts/cost-manager", "Path to Helm chart")
 	flag.Parse()
 
 	// Setup test suite
@@ -97,6 +97,39 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	return nil
 }
 
+func createKindCluster() (rerr error) {
+	// Create temporary file to store kind configuration
+	kindConfigurationFile, err := os.CreateTemp("", "kind-*.yaml")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := os.Remove(kindConfigurationFile.Name())
+		if rerr == nil {
+			rerr = err
+		}
+	}()
+
+	// Write kind configuration
+	_, err = kindConfigurationFile.WriteString(`
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+`)
+	if err != nil {
+		return err
+	}
+
+	err = runCommand("kind", "create", "cluster", "--name", kindClusterName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func installCostManager(ctx context.Context, image, helmChartPath string) (rerr error) {
 	// Create temporary file to store Helm values
 	valuesFile, err := os.CreateTemp("", "cost-manager-values-*.yaml")
@@ -121,7 +154,12 @@ config:
   apiVersion: cost-manager.io/v1alpha1
   kind: CostManagerConfiguration
   controllers:
+  - spot-migrator
   - pod-safe-to-evict-annotator
+  cloudProvider:
+    name: fake
+  spotMigrator:
+    migrationSchedule: "* * * * *"
   podSafeToEvictAnnotator:
     namespaceSelector:
       matchExpressions:
@@ -162,10 +200,10 @@ podMonitor:
 }
 
 func teardown() error {
-	err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
-	if err != nil {
-		return err
-	}
+	// err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }

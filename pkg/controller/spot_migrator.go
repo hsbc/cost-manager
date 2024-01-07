@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"gopkg.in/robfig/cron.v2"
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,7 +32,7 @@ const (
 	// relative to the current time; this ensures that spot migration still has a good chance of
 	// running even if cost-manager is being restarted regularly:
 	// https://pkg.go.dev/github.com/robfig/cron#hdr-Predefined_schedules
-	cronSpec = "@hourly"
+	defaultMigrationSchedule = "@hourly"
 
 	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L39-L40
 	toBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
@@ -59,6 +59,7 @@ var (
 // cost of spot Nodes:
 // https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md
 type spotMigrator struct {
+	Config        *v1alpha1.SpotMigrator
 	Clientset     clientgo.Interface
 	CloudProvider cloudprovider.CloudProvider
 }
@@ -73,10 +74,20 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 	// Register Prometheus metrics
 	metrics.Registry.MustRegister(spotMigratorOperationSuccessTotal)
 
+	// Parse migration schedule
+	migrationSchedule := defaultMigrationSchedule
+	if sm.Config != nil && sm.Config.MigrationSchedule != nil {
+		migrationSchedule = *sm.Config.MigrationSchedule
+	}
+	parsedMigrationSchedule, err := parseMigrationSchedule(migrationSchedule)
+	if err != nil {
+		return fmt.Errorf("failed to parse migration schedule: %s", err)
+	}
+
 	// If spot-migrator drains itself then any ongoing migration operations will be cancelled. To
-	// mitigate this we begin by draining and deleting any Nodes that have previously been selected
-	// for deletion. Note that we do not run a full migration in this case because otherwise we
-	// could get stuck in a continuous loop of draining and deleting the Node that spot-migrator is
+	// mitigate this we first drain and delete any Nodes that have previously been selected for
+	// deletion. Note that we do not run a full migration in this case because otherwise we could
+	// get stuck in a continuous loop of draining and deleting the Node that spot-migrator is
 	// running on; we will need to wait for the next schedule time for the migration to continue
 	onDemandNodes, err := sm.listOnDemandNodes(ctx)
 	if err != nil {
@@ -91,17 +102,11 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 		}
 	}
 
-	// Parse cron spec
-	cronSchedule, err := cron.Parse(cronSpec)
-	if err != nil {
-		return err
-	}
-
 	for {
 		// Wait until the next schedule time or the context is cancelled
 		now := time.Now()
-		nextSchedule := cronSchedule.Next(now)
-		sleepDuration := nextSchedule.Sub(now)
+		nextScheduleTime := parsedMigrationSchedule.Next(now)
+		sleepDuration := nextScheduleTime.Sub(now)
 		logger.WithValues("sleepDuration", sleepDuration.String()).Info("Waiting before next spot migration")
 		select {
 		case <-time.After(sleepDuration):
@@ -116,6 +121,10 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 			logger.Error(err, "Failed to run spot migration")
 		}
 	}
+}
+
+func parseMigrationSchedule(migrationSchedule string) (cron.Schedule, error) {
+	return cron.ParseStandard(migrationSchedule)
 }
 
 // run runs spot migration
@@ -184,7 +193,7 @@ func (sm *spotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 	}
 	onDemandNodes := []*corev1.Node{}
 	for _, node := range nodeList.Items {
-		// We always ignore control plane Nodes
+		// We always ignore control plane Nodes to make sure that we do not drain them
 		if isControlPlaneNode(&node) {
 			continue
 		}

@@ -7,6 +7,7 @@ import (
 
 	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
+	"github.com/hsbc/cost-manager/pkg/test"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,7 +25,7 @@ func TestSpotMigrator(t *testing.T) {
 	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
 	require.Nil(t, err)
 
-	// Label worker Node as an on-demand Node to give spot-migrator something to drain
+	// Find a worker Node
 	workerNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
@@ -39,13 +40,23 @@ func TestSpotMigrator(t *testing.T) {
 	require.Nil(t, err)
 	var nodeName string
 	for _, node := range nodeList.Items {
-		patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"false"}}}`, cloudproviderfake.SpotInstanceLabelKey))
-		err = kubeClient.Patch(ctx, &node, client.RawPatch(types.StrategicMergePatchType, patch))
-		require.Nil(t, err)
 		nodeName = node.Name
 		break
 	}
 	require.Greater(t, len(nodeName), 0)
+
+	// Deploy a workload to the worker Node
+	namespaceName := test.GenerateResourceName(t)
+	err = kubeClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}})
+	require.Nil(t, err)
+
+	// Label worker Node as an on-demand Node to give spot-migrator something to drain
+	node := &corev1.Node{}
+	err = kubeClient.Get(ctx, types.NamespacedName{Name: nodeName}, node)
+	require.Nil(t, err)
+	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"false"}}}`, cloudproviderfake.SpotInstanceLabelKey))
+	err = kubeClient.Patch(ctx, node, client.RawPatch(types.StrategicMergePatchType, patch))
+	require.Nil(t, err)
 
 	// Wait for the Node to be marked as unschedulable
 	t.Logf("Waiting for Node %s to be marked as unschedulable", nodeName)

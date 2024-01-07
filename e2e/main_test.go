@@ -35,11 +35,10 @@ func TestMain(m *testing.M) {
 
 	// Parse flags
 	image := flag.String("test.image", "cost-manager", "Local Docker image to test")
-	helmChartPath := flag.String("test.helm-chart-path", "../charts/cost-manager", "Path to Helm chart")
 	flag.Parse()
 
 	// Setup test suite
-	err := setup(ctx, *image, *helmChartPath)
+	err := setup(ctx, *image)
 	if err != nil {
 		logger.Error(err, "failed to setup E2E test suite")
 		os.Exit(1)
@@ -66,7 +65,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func setup(ctx context.Context, image, helmChartPath string) error {
+func setup(ctx context.Context, image string) error {
 	// Cleanup from any previous failed runs
 	err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
 	if err != nil {
@@ -95,7 +94,7 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	}
 
 	// Install cost-manager
-	err = installCostManager(ctx, image, helmChartPath)
+	err = installCostManager(ctx, image)
 	if err != nil {
 		return err
 	}
@@ -181,7 +180,7 @@ nodes:
 	return nil
 }
 
-func installCostManager(ctx context.Context, image, helmChartPath string) (rerr error) {
+func installCostManager(ctx context.Context, image string) (rerr error) {
 	// Create temporary file to store Helm values
 	valuesFile, err := os.CreateTemp("", "cost-manager-values-*.yaml")
 	if err != nil {
@@ -234,7 +233,7 @@ podMonitor:
 
 	// Install cost-manager
 	err = runCommand("helm", "upgrade", "--install",
-		"cost-manager", helmChartPath,
+		"cost-manager", "../charts/cost-manager",
 		"--namespace", "cost-manager", "--create-namespace",
 		"--values", valuesFile.Name(),
 		"--wait", "--timeout", "2m")

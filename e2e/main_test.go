@@ -106,34 +106,7 @@ func setup(ctx context.Context, image string) error {
 }
 
 func createKindCluster(ctx context.Context) (rerr error) {
-	// Create temporary file to store kind configuration
-	kindConfigurationFile, err := os.CreateTemp("", "kind-*.yaml")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err := os.Remove(kindConfigurationFile.Name())
-		if rerr == nil {
-			rerr = err
-		}
-	}()
-
-	// Write kind configuration. We create one worker Node for spot-migrator to drain an another
-	// worker Node to make sure there is a Node for cost-manager to be scheduled to
-	_, err = kindConfigurationFile.WriteString(fmt.Sprintf(`
-apiVersion: kind.x-k8s.io/v1alpha4
-kind: Cluster
-name: %s
-nodes:
-- role: control-plane
-- role: worker
-- role: worker
-`, kindClusterName))
-	if err != nil {
-		return err
-	}
-
-	err = runCommand("kind", "create", "cluster", "--config", kindConfigurationFile.Name())
+	err := runCommand("kind", "create", "cluster", "--name", kindClusterName, "--config", "./config/kind.yaml")
 	if err != nil {
 		return err
 	}

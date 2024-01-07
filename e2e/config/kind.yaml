@@ -1,0 +1,21 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+nodes:
+- role: control-plane
+# Create worker so that there is always somewhere to schedule to
+- role: worker
+# Create worker to be drained by spot-migrator
+- role: worker
+  labels:
+    spot-migrator: "true"
+  # Add taint to prevent other workloads from being scheduled to this Node:
+  # https://kind.sigs.k8s.io/docs/user/configuration/#kubeadm-config-patches
+  # https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/#kubeadm-k8s-io-v1beta3-JoinConfiguration
+  kubeadmConfigPatches:
+  - |
+    kind: JoinConfiguration
+    nodeRegistration:
+      taints:
+      - key: spot-migrator
+        value: "true"
+        effect: NoSchedule

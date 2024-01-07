@@ -33,12 +33,17 @@ func TestSpotMigrator(t *testing.T) {
 	kubeClient, err := client.NewWithWatch(restConfig, client.Options{})
 	require.Nil(t, err)
 
-	// Find a worker Node
+	// Find the worker Node to be drained by spot-migrator
 	workerNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
 				Key:      "node-role.kubernetes.io/control-plane",
 				Operator: "DoesNotExist",
+			},
+			{
+				Key:      "spot-migrator",
+				Operator: "In",
+				Values:   []string{"true"},
 			},
 		},
 	})
@@ -46,12 +51,8 @@ func TestSpotMigrator(t *testing.T) {
 	nodeList := &corev1.NodeList{}
 	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: workerNodeSelector})
 	require.Nil(t, err)
-	var nodeName string
-	for _, node := range nodeList.Items {
-		nodeName = node.Name
-		break
-	}
-	require.Greater(t, len(nodeName), 0)
+	require.Greater(t, len(nodeList.Items), 0)
+	nodeName := nodeList.Items[0].Name
 
 	// Deploy a workload to the worker Node
 	namespaceName := test.GenerateResourceName(t)
@@ -61,10 +62,18 @@ func TestSpotMigrator(t *testing.T) {
 	deploymentName := namespaceName
 	deployment, err := test.GenerateDeployment(namespaceName, deploymentName)
 	require.Nil(t, err)
-	t.Logf("Waiting for Deployment %s/%s to become available...", deployment.Namespace, deployment.Name)
 	deployment.Spec.Template.Spec.NodeSelector = map[string]string{"kubernetes.io/hostname": nodeName}
+	deployment.Spec.Template.Spec.Tolerations = []corev1.Toleration{
+		{
+			Key:      "spot-migrator",
+			Operator: corev1.TolerationOpEqual,
+			Value:    "true",
+			Effect:   corev1.TaintEffectNoSchedule,
+		},
+	}
 	err = kubeClient.Create(ctx, deployment)
 	require.Nil(t, err)
+	t.Logf("Waiting for Deployment %s/%s to become available...", deployment.Namespace, deployment.Name)
 	err = kubernetes.WaitUntilDeploymentAvailable(ctx, kubeClient, namespaceName, deploymentName)
 	require.Nil(t, err)
 	t.Logf("Deployment %s/%s is available!", deployment.Namespace, deployment.Name)
@@ -146,7 +155,7 @@ func TestSpotMigrator(t *testing.T) {
 	require.Nil(t, err)
 
 	// Wait for Prometheus metric to indicate successful migration
-	t.Logf("Waiting for Prometheus metric to indicate successful migration...")
+	t.Log("Waiting for Prometheus metric to indicate successful migration...")
 	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
 	require.Nil(t, err)
 	// Port forward to Prometheus in the background
@@ -184,7 +193,7 @@ func TestSpotMigrator(t *testing.T) {
 		}
 		time.Sleep(time.Second)
 	}
-	t.Logf("Migration successful!")
+	t.Log("Migration successful!")
 
 	// Delete Namespace
 	err = kubeClient.Delete(ctx, namespace)

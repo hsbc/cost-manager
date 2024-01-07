@@ -22,15 +22,14 @@ import (
 	apiwatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 func TestSpotMigrator(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	restConfig := config.GetConfigOrDie()
-	kubeClient, err := client.NewWithWatch(restConfig, client.Options{})
+
+	kubeClient, restConfig, err := kubernetes.NewClient()
 	require.Nil(t, err)
 
 	// Find the worker Node to be drained by spot-migrator
@@ -115,8 +114,8 @@ func TestSpotMigrator(t *testing.T) {
 	err = kubeClient.Patch(ctx, node, client.RawPatch(types.StrategicMergePatchType, patch))
 	require.Nil(t, err)
 
-	// Wait for the Node to be marked as unschedulable. This should not take longer than 2 minutes
-	// since spot-migrator is configured with a 1 minute migration interval
+	// Wait for the Node to be marked as unschedulable. This should not take any longer than 2
+	// minutes since spot-migrator is configured with a 1 minute migration interval
 	t.Logf("Waiting for Node %s to be marked as unschedulable...", nodeName)
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -199,7 +198,7 @@ func TestSpotMigrator(t *testing.T) {
 	err = kubeClient.Delete(ctx, namespace)
 	require.Nil(t, err)
 
-	// Verify that all control plane Nodes are schedulable
+	// Finally, we verify that all control plane Nodes are schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{

@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -112,7 +111,7 @@ func createKindCluster(ctx context.Context) (rerr error) {
 	}
 
 	// Wait for all Nodes to be created
-	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+	kubeClient, _, err := kubernetes.NewClient()
 	if err != nil {
 		return err
 	}
@@ -218,7 +217,7 @@ podMonitor:
 	}
 
 	// Wait for the cost-manager Deployment to become available
-	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+	kubeClient, _, err := kubernetes.NewClient()
 	if err != nil {
 		return err
 	}

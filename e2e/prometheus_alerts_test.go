@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/prometheus/client_golang/api"
 	prometheusv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 const (
@@ -24,8 +24,8 @@ func TestPrometheusAlerts(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	restConfig := config.GetConfigOrDie()
-	kubeClient, err := client.NewWithWatch(restConfig, client.Options{})
+
+	kubeClient, restConfig, err := kubernetes.NewClient()
 	require.Nil(t, err)
 
 	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
@@ -45,6 +45,21 @@ func TestPrometheusAlerts(t *testing.T) {
 	require.Nil(t, err)
 	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
 
+	// Wait for all cost-manager alerts to be registered with Prometheus
+	t.Log("Waiting for cost-manager alerts to be registered with Prometheus...")
+	costManagerPrometheusRule := &monitoringv1.PrometheusRule{}
+	err = kubeClient.Get(ctx, client.ObjectKey{Name: "cost-manager", Namespace: "cost-manager"}, costManagerPrometheusRule)
+	require.Nil(t, err)
+	for {
+		prometheusRules, err := prometheusAPI.Rules(ctx)
+		require.Nil(t, err)
+		if prometheusHasAllCostManagerAlerts(costManagerPrometheusRule, prometheusRules) {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	t.Log("All cost-manager alerts registered with Prometheus!")
+
 	// Wait for Prometheus to scrape cost-manager
 	for {
 		results, _, err := prometheusAPI.Query(ctx, `up{job="cost-manager",namespace="cost-manager"}`, time.Now())
@@ -59,6 +74,37 @@ func TestPrometheusAlerts(t *testing.T) {
 	err = waitForAllPrometheusAlertsToRemainInactive(ctx, prometheusAPI)
 	require.Nil(t, err)
 	t.Logf("All Prometheus alerts remained inactive for %s!", prometheusAlertsInactiveDuration)
+}
+
+func prometheusHasAllCostManagerAlerts(costManagerPrometheusRule *monitoringv1.PrometheusRule, prometheusRules prometheusv1.RulesResult) bool {
+	for _, group := range costManagerPrometheusRule.Spec.Groups {
+		for _, rule := range group.Rules {
+			if len(rule.Alert) > 0 {
+				if !prometheusHasGroupAlert(group.Name, rule.Alert, prometheusRules) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func prometheusHasGroupAlert(groupName string, alertName string, prometheusRules prometheusv1.RulesResult) bool {
+	for _, group := range prometheusRules.Groups {
+		if group.Name == groupName {
+			for _, rule := range group.Rules {
+				switch alert := rule.(type) {
+				case prometheusv1.AlertingRule:
+					if alertName == alert.Name {
+						return true
+					}
+				default:
+					continue
+				}
+			}
+		}
+	}
+	return false
 }
 
 func waitForAllPrometheusAlertsToRemainInactive(ctx context.Context, prometheusAPI prometheusv1.API) error {

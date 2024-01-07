@@ -162,11 +162,18 @@ func TestSpotMigrator(t *testing.T) {
 	})
 	require.Nil(t, err)
 	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
-	// Wait for the number of successful operations to increase
-	results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
-	require.Nil(t, err)
-	require.Equal(t, 1, len(results.(model.Vector)))
-	currentMetricValue := results.(model.Vector)[0].Value
+	// Wait for the spot-migrator metric to be scraped by Prometheus...
+	var currentMetricValue model.SampleValue
+	for {
+		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
+		require.Nil(t, err)
+		if len(results.(model.Vector)) == 1 {
+			currentMetricValue = results.(model.Vector)[0].Value
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	// ...and then wait for it to increase
 	for {
 		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
 		require.Nil(t, err)

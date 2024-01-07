@@ -134,6 +134,9 @@ nodes:
 
 	// Label all Nodes as spot Nodes until we are ready to test spot-migrator
 	err = runCommand("kubectl", "label", "node", "--all", fmt.Sprintf("%s=%s", cloudproviderfake.SpotInstanceLabelKey, cloudproviderfake.SpotInstanceLabelValue))
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

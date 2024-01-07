@@ -36,6 +36,7 @@ func TestSpotMigrator(t *testing.T) {
 	require.Nil(t, err)
 	nodeList := corev1.NodeList{}
 	err = kubeClient.List(ctx, &nodeList, client.MatchingLabelsSelector{Selector: selector})
+	require.Nil(t, err)
 	var nodeName string
 	for _, node := range nodeList.Items {
 		patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"false"}}}`, cloudproviderfake.SpotInstanceLabelKey))

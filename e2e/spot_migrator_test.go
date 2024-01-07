@@ -9,6 +9,9 @@ import (
 	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/hsbc/cost-manager/pkg/test"
+	"github.com/prometheus/client_golang/api"
+	prometheusv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -154,10 +157,45 @@ func TestSpotMigrator(t *testing.T) {
 		require.False(t, node.Spec.Unschedulable)
 	}
 
-	// Delete Node; typically this would be done by the node-controller:
+	// Delete Node; typically this would be done by the node-controller but we simulate it here:
 	// https://github.com/hsbc/cost-manager/blob/bf176ada100e19a765d276aee1a0a2d6038275e0/pkg/controller/spot_migrator.go#L242-L250
 	err = kubeClient.Delete(ctx, node)
 	require.Nil(t, err)
+
+	// Wait for Prometheus metric to indicate successful migration
+	t.Logf("Waiting for successful Prometheus metric...")
+	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
+	require.Nil(t, err)
+	// Port forward to Prometheus in the background
+	forwardedPort, close, err := kubernetes.PortForward(ctx, config.GetConfigOrDie(), pod.Namespace, pod.Name, 9090)
+	require.Nil(t, err)
+	defer func() {
+		err := close()
+		require.Nil(t, err)
+	}()
+	// Setup Prometheus client using local port forwarded port
+	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
+	prometheusClient, err := api.NewClient(api.Config{
+		Address: prometheusAddress,
+	})
+	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
+	for {
+		results, _, err := prometheusAPI.Query(ctx, "cost_manager_spot_migrator_operation_success_total", time.Now())
+		require.Nil(t, err)
+		// Any result with a value greater than 0 indicates migration success
+		migrationSuccess := false
+		for _, result := range results.(model.Vector) {
+			if result.Value > 0 {
+				migrationSuccess = true
+				break
+			}
+		}
+		if migrationSuccess {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	t.Logf("Found successful Prometheus metric!")
 
 	// Delete Namespace
 	err = kubeClient.Delete(ctx, namespace)

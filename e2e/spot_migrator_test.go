@@ -157,7 +157,7 @@ func TestSpotMigrator(t *testing.T) {
 		require.False(t, node.Spec.Unschedulable)
 	}
 
-	// Delete Node; typically this would be done by the node-controller but we simulate it here:
+	// Delete Node; typically this would be done by the node controller but we simulate it here:
 	// https://github.com/hsbc/cost-manager/blob/bf176ada100e19a765d276aee1a0a2d6038275e0/pkg/controller/spot_migrator.go#L242-L250
 	err = kubeClient.Delete(ctx, node)
 	require.Nil(t, err)
@@ -173,11 +173,12 @@ func TestSpotMigrator(t *testing.T) {
 		err := close()
 		require.Nil(t, err)
 	}()
-	// Setup Prometheus client using local port forwarded port
+	// Setup Prometheus client using local forwarded port
 	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
 	prometheusClient, err := api.NewClient(api.Config{
 		Address: prometheusAddress,
 	})
+	require.Nil(t, err)
 	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
 	for {
 		results, _, err := prometheusAPI.Query(ctx, "cost_manager_spot_migrator_operation_success_total", time.Now())

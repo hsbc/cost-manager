@@ -25,8 +25,8 @@ const (
 // annotation to Pods to ensure that they do not prevent cluster scale down:
 // https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node
 type podSafeToEvictAnnotator struct {
-	Client client.Client
 	Config *v1alpha1.PodSafeToEvictAnnotator
+	Client client.Client
 }
 
 var _ reconcile.Reconciler = &podSafeToEvictAnnotator{}

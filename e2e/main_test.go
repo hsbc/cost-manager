@@ -7,8 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
+	"github.com/hsbc/cost-manager/pkg/cloudprovider"
+	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -29,11 +35,10 @@ func TestMain(m *testing.M) {
 
 	// Parse flags
 	image := flag.String("test.image", "cost-manager", "Local Docker image to test")
-	helmChartPath := flag.String("test.helm-chart-path", "../../charts/cost-manager", "Path to Helm chart")
 	flag.Parse()
 
 	// Setup test suite
-	err := setup(ctx, *image, *helmChartPath)
+	err := setup(ctx, *image)
 	if err != nil {
 		logger.Error(err, "failed to setup E2E test suite")
 		os.Exit(1)
@@ -60,7 +65,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func setup(ctx context.Context, image, helmChartPath string) error {
+func setup(ctx context.Context, image string) error {
 	// Cleanup from any previous failed runs
 	err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
 	if err != nil {
@@ -68,7 +73,7 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	}
 
 	// Create kind cluster
-	err = runCommand("kind", "create", "cluster", "--name", kindClusterName)
+	err = createKindCluster(ctx)
 	if err != nil {
 		return err
 	}
@@ -89,7 +94,7 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	}
 
 	// Install cost-manager
-	err = installCostManager(ctx, image, helmChartPath)
+	err = installCostManager(ctx, image)
 	if err != nil {
 		return err
 	}
@@ -97,7 +102,85 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	return nil
 }
 
-func installCostManager(ctx context.Context, image, helmChartPath string) (rerr error) {
+func createKindCluster(ctx context.Context) (rerr error) {
+	// Create temporary file to store kind configuration
+	kindConfigurationFile, err := os.CreateTemp("", "kind-*.yaml")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := os.Remove(kindConfigurationFile.Name())
+		if rerr == nil {
+			rerr = err
+		}
+	}()
+
+	// Write kind configuration. We create one worker Node for spot-migrator to drain an another
+	// worker Node to make sure there is a Node for cost-manager to be scheduled to
+	_, err = kindConfigurationFile.WriteString(fmt.Sprintf(`
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: %s
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+`, kindClusterName))
+	if err != nil {
+		return err
+	}
+
+	err = runCommand("kind", "create", "cluster", "--config", kindConfigurationFile.Name())
+	if err != nil {
+		return err
+	}
+
+	// Wait for all Nodes to be created
+	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		return err
+	}
+	for {
+		nodeList := &corev1.NodeList{}
+		err = kubeClient.List(ctx, nodeList)
+		if err != nil {
+			return err
+		}
+		if len(nodeList.Items) == 3 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	// Label all worker Nodes as spot Nodes until we are ready to test spot-migrator
+	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "node-role.kubernetes.io/control-plane",
+				Operator: "DoesNotExist",
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	nodeList := &corev1.NodeList{}
+	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: selector})
+	if err != nil {
+		return err
+	}
+	for _, node := range nodeList.Items {
+		patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"%s"}}}`, cloudproviderfake.SpotInstanceLabelKey, cloudproviderfake.SpotInstanceLabelValue))
+		err = kubeClient.Patch(ctx, &node, client.RawPatch(types.StrategicMergePatchType, patch))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func installCostManager(ctx context.Context, image string) (rerr error) {
 	// Create temporary file to store Helm values
 	valuesFile, err := os.CreateTemp("", "cost-manager-values-*.yaml")
 	if err != nil {
@@ -121,7 +204,12 @@ config:
   apiVersion: cost-manager.io/v1alpha1
   kind: CostManagerConfiguration
   controllers:
+  - spot-migrator
   - pod-safe-to-evict-annotator
+  cloudProvider:
+    name: %s
+  spotMigrator:
+    migrationSchedule: "* * * * *"
   podSafeToEvictAnnotator:
     namespaceSelector:
       matchExpressions:
@@ -138,14 +226,14 @@ prometheusRule:
 
 podMonitor:
   enabled: true
-`, image))
+`, image, cloudprovider.FakeCloudProviderName))
 	if err != nil {
 		return err
 	}
 
 	// Install cost-manager
 	err = runCommand("helm", "upgrade", "--install",
-		"cost-manager", helmChartPath,
+		"cost-manager", "../charts/cost-manager",
 		"--namespace", "cost-manager", "--create-namespace",
 		"--values", valuesFile.Name(),
 		"--wait", "--timeout", "2m")

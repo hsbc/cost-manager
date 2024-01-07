@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"gopkg.in/robfig/cron.v2"
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,12 +32,15 @@ const (
 	// relative to the current time; this ensures that spot migration still has a good chance of
 	// running even if cost-manager is being restarted regularly:
 	// https://pkg.go.dev/github.com/robfig/cron#hdr-Predefined_schedules
-	cronSpec = "@hourly"
+	defaultMigrationSchedule = "@hourly"
 
 	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L39-L40
 	toBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
 	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L41-L42
 	deletionCandidateTaint = "DeletionCandidateOfClusterAutoscaler"
+
+	// https://kubernetes.io/docs/reference/labels-annotations-taints/#node-role-kubernetes-io-control-plane
+	controlPlaneNodeRoleLabelKey = "node-role.kubernetes.io/control-plane"
 )
 
 var (
@@ -55,6 +59,7 @@ var (
 // cost of spot Nodes:
 // https://github.com/kubernetes/autoscaler/blob/600cda52cf764a1f08b06fc8cc29b1ef95f13c76/cluster-autoscaler/proposals/pricing.md
 type spotMigrator struct {
+	Config        *v1alpha1.SpotMigrator
 	Clientset     clientgo.Interface
 	CloudProvider cloudprovider.CloudProvider
 }
@@ -69,8 +74,21 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 	// Register Prometheus metrics
 	metrics.Registry.MustRegister(spotMigratorOperationSuccessTotal)
 
-	// If spot-migrator drains itself then any ongoing migration operations will be cancelled so we
-	// begin by draining and deleting any Nodes that have previously been selected for deletion
+	// Parse migration schedule
+	migrationSchedule := defaultMigrationSchedule
+	if sm.Config != nil && sm.Config.MigrationSchedule != nil {
+		migrationSchedule = *sm.Config.MigrationSchedule
+	}
+	parsedMigrationSchedule, err := parseMigrationSchedule(migrationSchedule)
+	if err != nil {
+		return fmt.Errorf("failed to parse migration schedule: %s", err)
+	}
+
+	// If spot-migrator drains itself then any ongoing migration operations will be cancelled. To
+	// mitigate this we first drain and delete any Nodes that have previously been selected for
+	// deletion. Note that we do not run a full migration in this case because otherwise we could
+	// get stuck in a continuous loop of draining and deleting the Node that spot-migrator is
+	// running on; we will need to wait for the next schedule time for the migration to continue
 	onDemandNodes, err := sm.listOnDemandNodes(ctx)
 	if err != nil {
 		return err
@@ -84,17 +102,11 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 		}
 	}
 
-	// Parse cron spec
-	cronSchedule, err := cron.Parse(cronSpec)
-	if err != nil {
-		return err
-	}
-
 	for {
 		// Wait until the next schedule time or the context is cancelled
 		now := time.Now()
-		nextSchedule := cronSchedule.Next(now)
-		sleepDuration := nextSchedule.Sub(now)
+		nextScheduleTime := parsedMigrationSchedule.Next(now)
+		sleepDuration := nextScheduleTime.Sub(now)
 		logger.WithValues("sleepDuration", sleepDuration.String()).Info("Waiting before next spot migration")
 		select {
 		case <-time.After(sleepDuration):
@@ -109,6 +121,10 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 			logger.Error(err, "Failed to run spot migration")
 		}
 	}
+}
+
+func parseMigrationSchedule(migrationSchedule string) (cron.Schedule, error) {
+	return cron.ParseStandard(migrationSchedule)
 }
 
 // run runs spot migration
@@ -177,6 +193,10 @@ func (sm *spotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 	}
 	onDemandNodes := []*corev1.Node{}
 	for _, node := range nodeList.Items {
+		// We always ignore control plane Nodes to make sure that we do not drain them
+		if isControlPlaneNode(&node) {
+			continue
+		}
 		isSpotInstance, err := sm.CloudProvider.IsSpotInstance(ctx, &node)
 		if err != nil {
 			return onDemandNodes, err
@@ -186,6 +206,12 @@ func (sm *spotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 		}
 	}
 	return onDemandNodes, nil
+}
+
+// isControlPlaneNode returns true if the Node is part of the Kubernetes control plane
+func isControlPlaneNode(node *corev1.Node) bool {
+	_, ok := node.Labels[controlPlaneNodeRoleLabelKey]
+	return ok
 }
 
 // drainAndDeleteNode drains the specified Node and deletes the underlying instance
@@ -303,8 +329,9 @@ func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context
 // selectNodeForDeletion attempts the find the best Node to delete using the following algorithm:
 // 1. If there are any Nodes that have previously been selected for deletion then return the oldest
 // 2. Otherwise if there are any unschedulable Nodes then return the oldest
-// 3. Otherwise if there are any schedulable Nodes marked for deletion by the cluster-autoscaler then return the oldest
-// 4. Otherwise return the oldest schedulable Node
+// 3. Otherwise if there are any Nodes marked for deletion by the cluster-autoscaler then return the oldest
+// 4. Otherwise if there are any Nodes that are not running spot-migrator then return the oldest
+// 5. Otherwise return the oldest Node
 func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.Node, error) {
 	// There should always be at least 1 Node to select from
 	if len(nodes) == 0 {
@@ -318,7 +345,8 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 		return iTime.Before(jTime)
 	})
 
-	// If any Nodes have previously been selected for deletion then return the first one
+	// If any Nodes have previously been selected for deletion then return the first one. Note that
+	// all such Nodes should have already been drained and deleted when spot-migrator started up
 	for _, node := range nodes {
 		if isSelectedForDeletion(node) {
 			return node, nil
@@ -352,6 +380,19 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 			if taint.Key == deletionCandidateTaint && taint.Effect == corev1.TaintEffectPreferNoSchedule {
 				return node, nil
 			}
+		}
+	}
+
+	// If any Nodes are not running spot-migrator then we return the first one; this reduces the
+	// chance of spot-migrator draining itself and cancelling an ongoing migration operation. Note
+	// that there is very small possibility that the Node that spot-migrator is running on is the
+	// only on-demand Node remaining in the cluster that could be drained to trigger the addition of
+	// a new spot Node (e.g. if all other on-demand Nodes are running Pods that cannot be scheduled
+	// to spot Nodes) however this seems like the lesser evil compared to potentially repeatedly
+	// cancelling migration operations
+	for _, node := range nodes {
+		if node.Name != os.Getenv("NODE_NAME") {
+			return node, nil
 		}
 	}
 

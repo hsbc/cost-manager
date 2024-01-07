@@ -11,11 +11,16 @@ type CostManagerConfiguration struct {
 	// https://github.com/kubernetes/controller-manager/blob/2a157ca0075be690e609881e5fdd3362cc62ecdc/config/v1alpha1/types.go#L24-L52
 	Controllers             []string                 `json:"controllers,omitempty"`
 	CloudProvider           CloudProvider            `json:"cloudProvider"`
+	SpotMigrator            *SpotMigrator            `json:"spotMigrator,omitempty"`
 	PodSafeToEvictAnnotator *PodSafeToEvictAnnotator `json:"podSafeToEvictAnnotator,omitempty"`
 }
 
 type CloudProvider struct {
 	Name string `json:"name"`
+}
+
+type SpotMigrator struct {
+	MigrationSchedule *string `json:"migrationSchedule,omitempty"`
 }
 
 type PodSafeToEvictAnnotator struct {

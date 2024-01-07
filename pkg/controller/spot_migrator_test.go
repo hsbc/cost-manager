@@ -2,12 +2,12 @@ package controller
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
 	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/robfig/cron.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -73,13 +73,13 @@ func TestSpotMigratorNodeCreatedTrueOnNodeCreate(t *testing.T) {
 	require.True(t, nodeCreated(beforeNodes, afterNodes))
 }
 
-func TestSpotMigratorChooseNodeToDrainErrorOnEmptyList(t *testing.T) {
+func TestSpotMigratorSelectNodeForDeletionErrorOnEmptyList(t *testing.T) {
 	nodes := []*corev1.Node{}
-	_, err := selectNodeForDeletion(context.TODO(), nodes)
+	_, err := selectNodeForDeletion(context.Background(), nodes)
 	require.NotNil(t, err)
 }
 
-func TestSpotMigratorChooseNodeToDrainPreferOldest(t *testing.T) {
+func TestSpotMigratorSelectNodeForDeletionPreferOldest(t *testing.T) {
 	nodes := []*corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -115,12 +115,55 @@ func TestSpotMigratorChooseNodeToDrainPreferOldest(t *testing.T) {
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.Background(), nodes)
 	require.Nil(t, err)
 	require.Equal(t, "oldest", node.Name)
 }
 
-func TestSpotMigratorChooseNodeToDrainPreferNodesMarkedPreferNoScheduleByClusterAutoscaler(t *testing.T) {
+func TestSpotMigratorSelectNodeForDeletionDoNotPreferLocalNode(t *testing.T) {
+	err := os.Setenv("NODE_NAME", "oldest")
+	require.Nil(t, err)
+	nodes := []*corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "secondoldest",
+				CreationTimestamp: metav1.Time{
+					Time: time.Now().Add(2 * time.Hour),
+				},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "gce://secondoldest",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "oldest",
+				CreationTimestamp: metav1.Time{
+					Time: time.Now().Add(1 * time.Hour),
+				},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "gce://oldest",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "thirdoldest",
+				CreationTimestamp: metav1.Time{
+					Time: time.Now().Add(3 * time.Hour),
+				},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "gce://thirdoldest",
+			},
+		},
+	}
+	node, err := selectNodeForDeletion(context.Background(), nodes)
+	require.Nil(t, err)
+	require.Equal(t, "secondoldest", node.Name)
+}
+
+func TestSpotMigratorSelectNodeForDeletionPreferNodesMarkedPreferNoScheduleByClusterAutoscaler(t *testing.T) {
 	nodes := []*corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -162,12 +205,12 @@ func TestSpotMigratorChooseNodeToDrainPreferNodesMarkedPreferNoScheduleByCluster
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.Background(), nodes)
 	require.Nil(t, err)
 	require.Equal(t, "secondoldest", node.Name)
 }
 
-func TestSpotMigratorChooseNodeToDrainPreferNodesMarkedNoScheduleByClusterAutoscaler(t *testing.T) {
+func TestSpotMigratorSelectNodeForDeletionPreferNodesMarkedNoScheduleByClusterAutoscaler(t *testing.T) {
 	nodes := []*corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -215,12 +258,12 @@ func TestSpotMigratorChooseNodeToDrainPreferNodesMarkedNoScheduleByClusterAutosc
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.Background(), nodes)
 	require.Nil(t, err)
 	require.Equal(t, "thirdoldest", node.Name)
 }
 
-func TestSpotMigratorChooseNodeToDrainPreferUnschedulable(t *testing.T) {
+func TestSpotMigratorSelectNodeForDeletionPreferUnschedulable(t *testing.T) {
 	nodes := []*corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -254,12 +297,12 @@ func TestSpotMigratorChooseNodeToDrainPreferUnschedulable(t *testing.T) {
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.Background(), nodes)
 	require.Nil(t, err)
 	require.True(t, node.Spec.Unschedulable)
 }
 
-func TestSpotMigratorChooseNodeToDrainPreferSelectedForDeletion(t *testing.T) {
+func TestSpotMigratorSelectNodeForDeletionPreferSelectedForDeletion(t *testing.T) {
 	nodes := []*corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -296,21 +339,21 @@ func TestSpotMigratorChooseNodeToDrainPreferSelectedForDeletion(t *testing.T) {
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.TODO(), nodes)
+	node, err := selectNodeForDeletion(context.Background(), nodes)
 	require.Nil(t, err)
 	require.True(t, isSelectedForDeletion(node))
 }
 
-// TestCronSpecHasFixedActivationTimes ensures that the cron spec does not return activation times
-// that are a fixed amount of time ahead of the given time; otherwise, spot migration will never run
-// if cost-manager is restarting more regularly than the activation interval. For example, using
-// `@every 1h` for the cron spec would fail this test
-func TestSpotMigratorCronSpecHasFixedActivationTimes(t *testing.T) {
-	cronSchedule, err := cron.Parse(cronSpec)
+// TestSpotMigratorDefaultMigrationScheduleHasFixedActivationTimes ensures that the default
+// migration schedule does not return activation times that are a fixed amount of time ahead of the
+// given time; otherwise, spot migration will never run if cost-manager is restarting more regularly
+// than the activation interval. For example, `@every 1h` would fail this test
+func TestSpotMigratorDefaultMigrationScheduleHasFixedActivationTimes(t *testing.T) {
+	parsedMigrationSchedule, err := parseMigrationSchedule(defaultMigrationSchedule)
 	require.Nil(t, err)
 
 	testTime := time.Date(00, 00, 00, 00, 00, 00, 00, time.UTC)
-	require.Equal(t, cronSchedule.Next(testTime), cronSchedule.Next(testTime.Add(time.Second)))
+	require.Equal(t, parsedMigrationSchedule.Next(testTime), parsedMigrationSchedule.Next(testTime.Add(time.Second)))
 }
 
 func TestSpotMigratorPrometheusMetricRegistration(t *testing.T) {
@@ -476,6 +519,19 @@ func TestListOnDemandNodes(t *testing.T) {
 					},
 				},
 			},
+		},
+		"oneControlPlaneNode": {
+			nodes: []*corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+						Labels: map[string]string{
+							"node-role.kubernetes.io/control-plane": "",
+						},
+					},
+				},
+			},
+			onDemandNodes: []*corev1.Node{},
 		},
 		"multipleNodes": {
 			nodes: []*corev1.Node{

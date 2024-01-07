@@ -42,6 +42,7 @@ func SetupWithManager(ctx context.Context, mgr ctrl.Manager, config *v1alpha1.Co
 					return errors.Wrapf(err, "failed to instantiate cloud provider")
 				}
 				err = mgr.Add(&spotMigrator{
+					Config:        config.SpotMigrator,
 					Clientset:     clientset,
 					CloudProvider: cloudProvider,
 				})
@@ -50,8 +51,8 @@ func SetupWithManager(ctx context.Context, mgr ctrl.Manager, config *v1alpha1.Co
 				}
 			case podSafeToEvictAnnotatorControllerName:
 				err := (&podSafeToEvictAnnotator{
-					Client: mgr.GetClient(),
 					Config: config.PodSafeToEvictAnnotator,
+					Client: mgr.GetClient(),
 				}).SetupWithManager(mgr)
 				if err != nil {
 					return errors.Wrapf(err, "failed to setup %s", podSafeToEvictAnnotatorControllerName)

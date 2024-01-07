@@ -6,6 +6,7 @@ import (
 	"github.com/hsbc/cost-manager/pkg/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"knative.dev/pkg/ptr"
 )
 
 func TestDecode(t *testing.T) {
@@ -23,6 +24,8 @@ controllers:
 - pod-safe-to-evict-annotator
 cloudProvider:
   name: gcp
+spotMigrator:
+  migrationSchedule: "* * * * *"
 podSafeToEvictAnnotator:
   namespaceSelector:
     matchExpressions:
@@ -43,6 +46,9 @@ podSafeToEvictAnnotator:
 				},
 				CloudProvider: v1alpha1.CloudProvider{
 					Name: "gcp",
+				},
+				SpotMigrator: &v1alpha1.SpotMigrator{
+					MigrationSchedule: ptr.String("* * * * *"),
 				},
 				PodSafeToEvictAnnotator: &v1alpha1.PodSafeToEvictAnnotator{
 					NamespaceSelector: &metav1.LabelSelector{

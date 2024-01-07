@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/hsbc/cost-manager/pkg/cloudprovider"
+	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -68,7 +70,7 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	}
 
 	// Create kind cluster
-	err = runCommand("kind", "create", "cluster", "--name", kindClusterName)
+	err = createKindCluster()
 	if err != nil {
 		return err
 	}
@@ -110,23 +112,29 @@ func createKindCluster() (rerr error) {
 		}
 	}()
 
-	// Write kind configuration
-	_, err = kindConfigurationFile.WriteString(`
+	// Write kind configuration. We create one worker Node for spot-migrator to drain an another
+	// worker Node to make sure there is a Node for cost-manager to be scheduled to
+	_, err = kindConfigurationFile.WriteString(fmt.Sprintf(`
 apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
+name: %s
 nodes:
 - role: control-plane
 - role: worker
 - role: worker
-`)
+`, kindClusterName))
 	if err != nil {
 		return err
 	}
 
-	err = runCommand("kind", "create", "cluster", "--name", kindClusterName)
+	err = runCommand("kind", "create", "cluster", "--config", kindConfigurationFile.Name())
 	if err != nil {
 		return err
 	}
+
+	// Label all Nodes as spot Nodes until we are ready to test spot-migrator
+	err = runCommand("kubectl", "label", "node", "--all", fmt.Sprintf("%s=%s", cloudproviderfake.SpotInstanceLabelKey, cloudproviderfake.SpotInstanceLabelValue))
+
 	return nil
 }
 
@@ -157,7 +165,7 @@ config:
   - spot-migrator
   - pod-safe-to-evict-annotator
   cloudProvider:
-    name: fake
+    name: %s
   spotMigrator:
     migrationSchedule: "* * * * *"
   podSafeToEvictAnnotator:
@@ -176,7 +184,7 @@ prometheusRule:
 
 podMonitor:
   enabled: true
-`, image))
+`, image, cloudprovider.FakeCloudProviderName))
 	if err != nil {
 		return err
 	}

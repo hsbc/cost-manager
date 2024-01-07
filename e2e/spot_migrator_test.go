@@ -91,6 +91,8 @@ func TestSpotMigrator(t *testing.T) {
 		}
 		return pdb.Name == pdbName && pdb.Status.DisruptionsAllowed == 0 && pdb.Generation == pdb.Status.ObservedGeneration, nil
 	}
+	_, err = watch.UntilWithSync(ctx, listerWatcher, &policyv1.PodDisruptionBudget{}, nil, condition)
+	require.Nil(t, err)
 
 	// Label worker Node as an on-demand Node to give spot-migrator something to drain
 	node := &corev1.Node{}

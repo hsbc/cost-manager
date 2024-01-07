@@ -25,7 +25,7 @@ func TestSpotMigrator(t *testing.T) {
 	require.Nil(t, err)
 
 	// Label worker Node as an on-demand Node to give spot-migrator something to drain
-	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+	workerNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
 				Key:      "node-role.kubernetes.io/control-plane",
@@ -34,8 +34,8 @@ func TestSpotMigrator(t *testing.T) {
 		},
 	})
 	require.Nil(t, err)
-	nodeList := corev1.NodeList{}
-	err = kubeClient.List(ctx, &nodeList, client.MatchingLabelsSelector{Selector: selector})
+	nodeList := &corev1.NodeList{}
+	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: workerNodeSelector})
 	require.Nil(t, err)
 	var nodeName string
 	for _, node := range nodeList.Items {
@@ -49,7 +49,7 @@ func TestSpotMigrator(t *testing.T) {
 
 	// Wait for the Node to be marked as unschedulable
 	t.Logf("Waiting for Node %s to be marked as unschedulable", nodeName)
-	watcher := kubernetes.NewWatcher(ctx, kubeClient, &corev1.NodeList{})
+	listerWatcher := kubernetes.NewListerWatcher(ctx, kubeClient, &corev1.NodeList{})
 	condition := func(event apiwatch.Event) (bool, error) {
 		node, err := kubernetes.ParseWatchEventObject[*corev1.Node](event)
 		if err != nil {
@@ -57,7 +57,25 @@ func TestSpotMigrator(t *testing.T) {
 		}
 		return node.Name == nodeName && node.Spec.Unschedulable, nil
 	}
-	_, err = watch.Until(ctx, nodeList.ResourceVersion, watcher, condition)
+	_, err = watch.UntilWithSync(ctx, listerWatcher, &corev1.Node{}, nil, condition)
 	require.Nil(t, err)
 	t.Logf("Node %s marked as unschedulable!", nodeName)
+
+	// Verify that all control plane Nodes are schedulable
+	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "node-role.kubernetes.io/control-plane",
+				Operator: "Exists",
+			},
+		},
+	})
+	require.Nil(t, err)
+	nodeList = &corev1.NodeList{}
+	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: controlPlaneNodeSelector})
+	require.Nil(t, err)
+	require.Greater(t, nodeList.Items, 0)
+	for _, node := range nodeList.Items {
+		require.False(t, node.Spec.Unschedulable)
+	}
 }

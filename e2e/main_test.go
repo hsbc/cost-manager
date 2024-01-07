@@ -7,10 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/hsbc/cost-manager/pkg/cloudprovider"
 	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -70,7 +74,7 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	}
 
 	// Create kind cluster
-	err = createKindCluster()
+	err = createKindCluster(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,7 +103,7 @@ func setup(ctx context.Context, image, helmChartPath string) error {
 	return nil
 }
 
-func createKindCluster() (rerr error) {
+func createKindCluster(ctx context.Context) (rerr error) {
 	// Create temporary file to store kind configuration
 	kindConfigurationFile, err := os.CreateTemp("", "kind-*.yaml")
 	if err != nil {
@@ -132,10 +136,46 @@ nodes:
 		return err
 	}
 
-	// Label all Nodes as spot Nodes until we are ready to test spot-migrator
-	err = runCommand("kubectl", "label", "node", "--all", fmt.Sprintf("%s=%s", cloudproviderfake.SpotInstanceLabelKey, cloudproviderfake.SpotInstanceLabelValue))
+	// Wait for all Nodes to be created
+	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
 	if err != nil {
 		return err
+	}
+	for {
+		nodeList := &corev1.NodeList{}
+		err = kubeClient.List(ctx, nodeList)
+		if err != nil {
+			return err
+		}
+		if len(nodeList.Items) == 3 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	// Label all worker Nodes as spot Nodes until we are ready to test spot-migrator
+	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "node-role.kubernetes.io/control-plane",
+				Operator: "DoesNotExist",
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	nodeList := &corev1.NodeList{}
+	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: selector})
+	if err != nil {
+		return err
+	}
+	for _, node := range nodeList.Items {
+		patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"%s"}}}`, cloudproviderfake.SpotInstanceLabelKey, cloudproviderfake.SpotInstanceLabelValue))
+		err = kubeClient.Patch(ctx, &node, client.RawPatch(types.StrategicMergePatchType, patch))
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -211,10 +251,10 @@ podMonitor:
 }
 
 func teardown() error {
-	// err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
-	// if err != nil {
-	// 	return err
-	// }
+	err := runCommand("kind", "delete", "cluster", "--name", kindClusterName)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

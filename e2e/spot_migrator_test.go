@@ -29,7 +29,8 @@ func TestSpotMigrator(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+	restConfig := config.GetConfigOrDie()
+	kubeClient, err := client.NewWithWatch(restConfig, client.Options{})
 	require.Nil(t, err)
 
 	// Find a worker Node
@@ -149,7 +150,7 @@ func TestSpotMigrator(t *testing.T) {
 	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
 	require.Nil(t, err)
 	// Port forward to Prometheus in the background
-	forwardedPort, close, err := kubernetes.PortForward(ctx, config.GetConfigOrDie(), pod.Namespace, pod.Name, 9090)
+	forwardedPort, close, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
 	require.Nil(t, err)
 	defer func() {
 		err := close()

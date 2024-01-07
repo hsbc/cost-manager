@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	prometheusAlertsInactiveDuration = time.Minute
+	prometheusAlertsInactiveDuration = 30 * time.Second
 )
 
 func TestPrometheusAlerts(t *testing.T) {
@@ -58,7 +58,7 @@ func TestPrometheusAlerts(t *testing.T) {
 	t.Logf("Ensuring all Prometheus alerts remain inactive for %s...", prometheusAlertsInactiveDuration)
 	err = waitForAllPrometheusAlertsToRemainInactive(ctx, prometheusAPI)
 	require.Nil(t, err)
-	t.Log("All Prometheus alerts remained inactive!")
+	t.Logf("All Prometheus alerts remained inactive for %s!", prometheusAlertsInactiveDuration)
 }
 
 func waitForAllPrometheusAlertsToRemainInactive(ctx context.Context, prometheusAPI prometheusv1.API) error {

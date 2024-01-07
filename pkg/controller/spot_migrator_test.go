@@ -521,6 +521,19 @@ func TestListOnDemandNodes(t *testing.T) {
 				},
 			},
 		},
+		"oneControlPlaneNode": {
+			nodes: []*corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+						Labels: map[string]string{
+							"node-role.kubernetes.io/control-plane": "",
+						},
+					},
+				},
+			},
+			onDemandNodes: []*corev1.Node{},
+		},
 		"multipleNodes": {
 			nodes: []*corev1.Node{
 				{

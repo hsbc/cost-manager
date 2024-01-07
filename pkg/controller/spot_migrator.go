@@ -38,6 +38,9 @@ const (
 	toBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
 	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L41-L42
 	deletionCandidateTaint = "DeletionCandidateOfClusterAutoscaler"
+
+	// https://kubernetes.io/docs/reference/labels-annotations-taints/#node-role-kubernetes-io-control-plane
+	controlPlaneNodeRoleLabelKey = "node-role.kubernetes.io/control-plane"
 )
 
 var (
@@ -181,6 +184,10 @@ func (sm *spotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 	}
 	onDemandNodes := []*corev1.Node{}
 	for _, node := range nodeList.Items {
+		// We always ignore control plane Nodes
+		if isControlPlaneNode(&node) {
+			continue
+		}
 		isSpotInstance, err := sm.CloudProvider.IsSpotInstance(ctx, &node)
 		if err != nil {
 			return onDemandNodes, err
@@ -190,6 +197,12 @@ func (sm *spotMigrator) listOnDemandNodes(ctx context.Context) ([]*corev1.Node, 
 		}
 	}
 	return onDemandNodes, nil
+}
+
+// isControlPlaneNode returns true if the Node is part of the Kubernetes control plane
+func isControlPlaneNode(node *corev1.Node) bool {
+	_, ok := node.Labels[controlPlaneNodeRoleLabelKey]
+	return ok
 }
 
 // drainAndDeleteNode drains the specified Node and deletes the underlying instance

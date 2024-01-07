@@ -1,0 +1,36 @@
+global:
+  rbac:
+    create: true
+    pspEnabled: false
+fullnameOverride: prometheus
+defaultRules:
+  create: false
+alertmanager:
+  enabled: false
+grafana:
+  enabled: false
+kubeApiServer:
+  enabled: false
+kubelet:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+coreDns:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeStateMetrics:
+  enabled: false
+nodeExporter:
+  enabled: false
+prometheus:
+  enabled: false
+prometheusOperator:
+  prometheusInstanceNamespaces:
+  - monitoring
+  serviceMonitor:
+    selfMonitor: false

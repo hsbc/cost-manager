@@ -85,10 +85,13 @@ func setup(ctx context.Context, image string) error {
 	}
 
 	// Install CRDs
-	err = runCommand("kubectl", "apply",
-		"-f", "https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml",
-		"-f", "https://raw.githubusercontent.com/prometheus-community/helm-charts/d616961860a0248f77a2783923511550fad23569/charts/kube-prometheus-stack/charts/crds/crds/crd-prometheusrules.yaml",
-		"-f", "https://raw.githubusercontent.com/prometheus-community/helm-charts/d616961860a0248f77a2783923511550fad23569/charts/kube-prometheus-stack/charts/crds/crds/crd-podmonitors.yaml")
+	err = runCommand("kubectl", "apply", "-f", "https://raw.githubusercontent.com/kubernetes/autoscaler/5469d7912072c1070eedc680c89e27d46b8f4f82/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml")
+	if err != nil {
+		return err
+	}
+
+	// Install Prometheus Operator and Prometheus
+	err = installPrometheus(ctx, image)
 	if err != nil {
 		return err
 	}
@@ -247,6 +250,37 @@ podMonitor:
 		return err
 	}
 	return kubernetes.WaitUntilDeploymentAvailable(ctx, kubeClient, "cost-manager", "cost-manager")
+}
+
+func installPrometheus(ctx context.Context, image string) (rerr error) {
+	// Add prometheus-community Helm repository:
+	// https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack#get-helm-repository-info
+	err := runCommand("helm", "repo", "add", "prometheus-community", "https://prometheus-community.github.io/helm-charts")
+	if err != nil {
+		return err
+	}
+	err = runCommand("helm", "repo", "update", "prometheus-community")
+	if err != nil {
+		return err
+	}
+
+	// Install Prometheus Operator
+	err = runCommand("helm", "upgrade", "--install",
+		"kube-prometheus-stack", "prometheus-community/kube-prometheus-stack",
+		"--namespace", "monitoring", "--create-namespace",
+		"--values", "./config/kube-prometheus-stack-values.yaml",
+		"--wait", "--timeout", "2m")
+	if err != nil {
+		return err
+	}
+
+	// Install Prometheus
+	err = runCommand("kubectl", "apply", "-f", "./config/prometheus.yaml")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func teardown() error {

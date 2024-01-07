@@ -9,6 +9,9 @@ import (
 	cloudproviderfake "github.com/hsbc/cost-manager/pkg/cloudprovider/fake"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/hsbc/cost-manager/pkg/test"
+	"github.com/prometheus/client_golang/api"
+	prometheusv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -26,7 +29,8 @@ func TestSpotMigrator(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+	restConfig := config.GetConfigOrDie()
+	kubeClient, err := client.NewWithWatch(restConfig, client.Options{})
 	require.Nil(t, err)
 
 	// Find a worker Node
@@ -102,10 +106,9 @@ func TestSpotMigrator(t *testing.T) {
 	err = kubeClient.Patch(ctx, node, client.RawPatch(types.StrategicMergePatchType, patch))
 	require.Nil(t, err)
 
-	// Wait for the Node to be marked as unschedulable
+	// Wait for the Node to be marked as unschedulable. This should not take longer than 2 minutes
+	// since spot-migrator is configured with a 1 minute migration interval
 	t.Logf("Waiting for Node %s to be marked as unschedulable...", nodeName)
-	// spot-migrator is configured with a 1 minute migration interval so this should not take longer
-	// than 2 minutes
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	listerWatcher = kubernetes.NewListerWatcher(ctx, kubeClient, &corev1.NodeList{})
@@ -137,6 +140,56 @@ func TestSpotMigrator(t *testing.T) {
 	require.Nil(t, err)
 	t.Logf("Deployment %s/%s is unavailable!", deployment.Namespace, deployment.Name)
 
+	// Delete Node; typically this would be done by the node controller but we simulate it here:
+	// https://github.com/hsbc/cost-manager/blob/bf176ada100e19a765d276aee1a0a2d6038275e0/pkg/controller/spot_migrator.go#L242-L250
+	err = kubeClient.Delete(ctx, node)
+	require.Nil(t, err)
+
+	// Wait for Prometheus metric to indicate successful migration
+	t.Logf("Waiting for Prometheus metric to indicate successful migration...")
+	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
+	require.Nil(t, err)
+	// Port forward to Prometheus in the background
+	forwardedPort, close, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
+	require.Nil(t, err)
+	defer func() {
+		err := close()
+		require.Nil(t, err)
+	}()
+	// Setup Prometheus client using local forwarded port
+	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
+	prometheusClient, err := api.NewClient(api.Config{
+		Address: prometheusAddress,
+	})
+	require.Nil(t, err)
+	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
+	// Wait for the spot-migrator metric to be scraped by Prometheus...
+	var currentMetricValue model.SampleValue
+	for {
+		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
+		require.Nil(t, err)
+		if len(results.(model.Vector)) == 1 {
+			currentMetricValue = results.(model.Vector)[0].Value
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	// ...and then wait for it to increase
+	for {
+		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
+		require.Nil(t, err)
+		require.Equal(t, 1, len(results.(model.Vector)))
+		if results.(model.Vector)[0].Value > currentMetricValue {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	t.Logf("Migration successful!")
+
+	// Delete Namespace
+	err = kubeClient.Delete(ctx, namespace)
+	require.Nil(t, err)
+
 	// Verify that all control plane Nodes are schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
@@ -154,8 +207,4 @@ func TestSpotMigrator(t *testing.T) {
 	for _, node := range nodeList.Items {
 		require.False(t, node.Spec.Unschedulable)
 	}
-
-	// Delete Namespace
-	err = kubeClient.Delete(ctx, namespace)
-	require.Nil(t, err)
 }

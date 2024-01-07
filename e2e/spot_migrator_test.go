@@ -104,6 +104,10 @@ func TestSpotMigrator(t *testing.T) {
 
 	// Wait for the Node to be marked as unschedulable
 	t.Logf("Waiting for Node %s to be marked as unschedulable...", nodeName)
+	// spot-migrator is configured with a 1 minute migration interval so this should not take longer
+	// than 2 minutes
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
 	listerWatcher = kubernetes.NewListerWatcher(ctx, kubeClient, &corev1.NodeList{})
 	condition = func(event apiwatch.Event) (bool, error) {
 		node, err := kubernetes.ParseWatchEventObject[*corev1.Node](event)
@@ -112,13 +116,13 @@ func TestSpotMigrator(t *testing.T) {
 		}
 		return node.Name == nodeName && node.Spec.Unschedulable, nil
 	}
-	_, err = watch.UntilWithSync(ctx, listerWatcher, &corev1.Node{}, nil, condition)
+	_, err = watch.UntilWithSync(ctxWithTimeout, listerWatcher, &corev1.Node{}, nil, condition)
 	require.Nil(t, err)
 	t.Logf("Node %s marked as unschedulable!", nodeName)
 
 	// Make sure that the PodDisruptionBudget blocks eviction
 	t.Logf("Ensuring that Deployment %s/%s is not evicted...", deployment.Namespace, deployment.Name)
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctxWithTimeout, cancel = context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	err = kubernetes.WaitUntilDeploymentUnavailable(ctxWithTimeout, kubeClient, namespaceName, deploymentName)
 	require.True(t, wait.Interrupted(err))

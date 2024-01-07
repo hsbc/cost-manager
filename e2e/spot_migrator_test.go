@@ -102,10 +102,9 @@ func TestSpotMigrator(t *testing.T) {
 	err = kubeClient.Patch(ctx, node, client.RawPatch(types.StrategicMergePatchType, patch))
 	require.Nil(t, err)
 
-	// Wait for the Node to be marked as unschedulable
+	// Wait for the Node to be marked as unschedulable. This should not take longer than 2 minutes
+	// since spot-migrator is configured with a 1 minute migration interval
 	t.Logf("Waiting for Node %s to be marked as unschedulable...", nodeName)
-	// spot-migrator is configured with a 1 minute migration interval so this should not take longer
-	// than 2 minutes
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	listerWatcher = kubernetes.NewListerWatcher(ctx, kubeClient, &corev1.NodeList{})
@@ -154,6 +153,11 @@ func TestSpotMigrator(t *testing.T) {
 	for _, node := range nodeList.Items {
 		require.False(t, node.Spec.Unschedulable)
 	}
+
+	// Delete Node; typically this would be done by the node-controller:
+	// https://github.com/hsbc/cost-manager/blob/bf176ada100e19a765d276aee1a0a2d6038275e0/pkg/controller/spot_migrator.go#L242-L250
+	err = kubeClient.Delete(ctx, node)
+	require.Nil(t, err)
 
 	// Delete Namespace
 	err = kubeClient.Delete(ctx, namespace)

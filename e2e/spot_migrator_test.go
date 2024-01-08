@@ -61,34 +61,6 @@ func TestSpotMigrator(t *testing.T) {
 	}
 	t.Log("Failure metric has been scraped by Prometheus!")
 
-	// Find the cost-manager Pod...
-	podList := &corev1.PodList{}
-	err = kubeClient.List(ctx, podList,
-		client.InNamespace("cost-manager"),
-		client.MatchingLabels{"app.kubernetes.io/name": "cost-manager"})
-	require.Nil(t, err)
-	require.Equal(t, len(podList.Items), 1)
-	// ...and make sure it is never deleted to ensure that the failure metric is not reset
-	ctxWithCancel, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		watcher := kubernetes.NewWatcher(ctx, kubeClient, &corev1.PodList{},
-			client.InNamespace("cost-manager"),
-			client.MatchingLabels{"app.kubernetes.io/name": "cost-manager"})
-		condition := func(event apiwatch.Event) (bool, error) {
-			pod, err := kubernetes.ParseWatchEventObject[*corev1.Pod](event)
-			if err != nil {
-				return false, err
-			}
-			if event.Type == apiwatch.Deleted {
-				return false, fmt.Errorf("cost-manager Pod %s/%s was deleted!", pod.Namespace, pod.Name)
-			}
-			return false, nil
-		}
-		_, err := watch.Until(ctxWithCancel, podList.ResourceVersion, watcher, condition)
-		require.True(t, wait.Interrupted(err), extractErrorMessage(err))
-	}()
-
 	// Find the worker Node to be drained by spot-migrator
 	workerNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{

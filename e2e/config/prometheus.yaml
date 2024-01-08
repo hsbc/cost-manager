@@ -61,7 +61,7 @@ metadata:
   namespace: monitoring
 spec:
   serviceAccountName: prometheus
-  scrapeInterval: 5s
+  scrapeInterval: 2s
   # Watch for all PrometheusRules and PodMonitors
   ruleSelector: {}
   ruleNamespaceSelector: {}

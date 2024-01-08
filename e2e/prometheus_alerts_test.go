@@ -30,16 +30,15 @@ func TestPrometheusAlerts(t *testing.T) {
 	kubeClient, restConfig, err := kubernetes.NewClient()
 	require.Nil(t, err)
 
+	// Port forward to Prometheus and create client using local forwarded port
 	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
 	require.Nil(t, err)
-	// Port forward to Prometheus in the background
-	forwardedPort, close, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
+	forwardedPort, stop, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
 	require.Nil(t, err)
 	defer func() {
-		err := close()
+		err := stop()
 		require.Nil(t, err)
 	}()
-	// Setup Prometheus client using local forwarded port
 	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
 	prometheusClient, err := api.NewClient(api.Config{
 		Address: prometheusAddress,

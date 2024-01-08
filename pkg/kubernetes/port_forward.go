@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/transport/spdy"
 )
 
-// PortForward port forwards to the specified Pod in the background. The forwarded port is a random
-// available local port which is returned as well as a function to close the listener when finished
+// PortForward port forwards to the specified Pod. The forwarded port is a random available local
+// port which is returned as well as a function to stop the port forward when finished
 func PortForward(ctx context.Context, restConfig *rest.Config, podNamespace, podName string, port int) (uint16, func() error, error) {
 	stopChan, readyChan, errChan := make(chan struct{}, 1), make(chan struct{}, 1), make(chan error, 1)
 	forwarder, err := createForwarder(ctx, restConfig, stopChan, readyChan, podNamespace, podName, port)
@@ -36,7 +36,7 @@ func PortForward(ctx context.Context, restConfig *rest.Config, podNamespace, pod
 		return 0, nil, errors.New("port forward finished")
 	}
 	// Create function for the caller to finish port forwarding
-	close := func() error {
+	stop := func() error {
 		// Make sure any started listeners are stopped...
 		close(stopChan)
 		// ...and wait for the port forward to finish
@@ -44,13 +44,13 @@ func PortForward(ctx context.Context, restConfig *rest.Config, podNamespace, pod
 	}
 	forwardedPorts, err := forwarder.GetPorts()
 	if err != nil {
-		return 0, nil, multierror.Append(err, close())
+		return 0, nil, multierror.Append(err, stop())
 	}
 	if len(forwardedPorts) != 1 {
 		err := fmt.Errorf("unexpected number of forwarded ports: %d", len(forwardedPorts))
-		return 0, nil, multierror.Append(err, close())
+		return 0, nil, multierror.Append(err, stop())
 	}
-	return forwardedPorts[0].Local, close, nil
+	return forwardedPorts[0].Local, stop, nil
 }
 
 func createForwarder(ctx context.Context, restConfig *rest.Config, stopChan, readyChan chan struct{}, podNamespace, podName string, port int) (*portforward.PortForwarder, error) {

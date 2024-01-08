@@ -1,12 +1,12 @@
 # cost-manager
 
-cost-manager is a collection of Kubernetes
-[controllers](https://kubernetes.io/docs/concepts/architecture/controller/) that automate cost
+cost-manager is a Kubernetes controller manager that manages
+[controllers](https://kubernetes.io/docs/concepts/architecture/controller/) to automate cost
 optimisations.
 
 ## Controllers
 
-Here we provide details of the various cost-manager controllers.
+Here we provide details of the various controllers supported by cost-manager.
 
 ### spot-migrator
 

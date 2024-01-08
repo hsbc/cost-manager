@@ -22,23 +22,29 @@ import (
 	apiwatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+// TestSpotMigrator tests that spot-migrator successfully drains a worker Node while respecting
+// PodDisruptionBudgets and excludes control plane Nodes
 func TestSpotMigrator(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	restConfig := config.GetConfigOrDie()
-	kubeClient, err := client.NewWithWatch(restConfig, client.Options{})
+
+	kubeClient, restConfig, err := kubernetes.NewClient()
 	require.Nil(t, err)
 
-	// Find a worker Node
+	// Find the worker Node to be drained by spot-migrator
 	workerNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
 				Key:      "node-role.kubernetes.io/control-plane",
 				Operator: "DoesNotExist",
+			},
+			{
+				Key:      "spot-migrator",
+				Operator: "In",
+				Values:   []string{"true"},
 			},
 		},
 	})
@@ -46,12 +52,8 @@ func TestSpotMigrator(t *testing.T) {
 	nodeList := &corev1.NodeList{}
 	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: workerNodeSelector})
 	require.Nil(t, err)
-	var nodeName string
-	for _, node := range nodeList.Items {
-		nodeName = node.Name
-		break
-	}
-	require.Greater(t, len(nodeName), 0)
+	require.Greater(t, len(nodeList.Items), 0)
+	nodeName := nodeList.Items[0].Name
 
 	// Deploy a workload to the worker Node
 	namespaceName := test.GenerateResourceName(t)
@@ -61,10 +63,18 @@ func TestSpotMigrator(t *testing.T) {
 	deploymentName := namespaceName
 	deployment, err := test.GenerateDeployment(namespaceName, deploymentName)
 	require.Nil(t, err)
-	t.Logf("Waiting for Deployment %s/%s to become available...", deployment.Namespace, deployment.Name)
 	deployment.Spec.Template.Spec.NodeSelector = map[string]string{"kubernetes.io/hostname": nodeName}
+	deployment.Spec.Template.Spec.Tolerations = []corev1.Toleration{
+		{
+			Key:      "spot-migrator",
+			Operator: corev1.TolerationOpEqual,
+			Value:    "true",
+			Effect:   corev1.TaintEffectNoSchedule,
+		},
+	}
 	err = kubeClient.Create(ctx, deployment)
 	require.Nil(t, err)
+	t.Logf("Waiting for Deployment %s/%s to become available...", deployment.Namespace, deployment.Name)
 	err = kubernetes.WaitUntilDeploymentAvailable(ctx, kubeClient, namespaceName, deploymentName)
 	require.Nil(t, err)
 	t.Logf("Deployment %s/%s is available!", deployment.Namespace, deployment.Name)
@@ -106,8 +116,8 @@ func TestSpotMigrator(t *testing.T) {
 	err = kubeClient.Patch(ctx, node, client.RawPatch(types.StrategicMergePatchType, patch))
 	require.Nil(t, err)
 
-	// Wait for the Node to be marked as unschedulable. This should not take longer than 2 minutes
-	// since spot-migrator is configured with a 1 minute migration interval
+	// Wait for the Node to be marked as unschedulable. This should not take any longer than 2
+	// minutes since spot-migrator is configured with a 1 minute migration interval
 	t.Logf("Waiting for Node %s to be marked as unschedulable...", nodeName)
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -146,7 +156,7 @@ func TestSpotMigrator(t *testing.T) {
 	require.Nil(t, err)
 
 	// Wait for Prometheus metric to indicate successful migration
-	t.Logf("Waiting for Prometheus metric to indicate successful migration...")
+	t.Log("Waiting for Prometheus metric to indicate successful migration...")
 	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
 	require.Nil(t, err)
 	// Port forward to Prometheus in the background
@@ -184,13 +194,13 @@ func TestSpotMigrator(t *testing.T) {
 		}
 		time.Sleep(time.Second)
 	}
-	t.Logf("Migration successful!")
+	t.Log("Migration successful!")
 
 	// Delete Namespace
 	err = kubeClient.Delete(ctx, namespace)
 	require.Nil(t, err)
 
-	// Verify that all control plane Nodes are schedulable
+	// Finally, we verify that all control plane Nodes are schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{

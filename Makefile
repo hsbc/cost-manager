@@ -9,7 +9,7 @@ build:
 
 .PHONY: e2e
 e2e:
-	go test ./e2e --test.image=$(IMAGE) --shuffle=on -race -v
+	go test ./e2e --test.image=$(IMAGE) --parallel=4 --shuffle=on -race -v
 
 image:
 	docker build -t $(IMAGE) .

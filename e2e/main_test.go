@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -106,40 +105,13 @@ func setup(ctx context.Context, image string) error {
 }
 
 func createKindCluster(ctx context.Context) (rerr error) {
-	// Create temporary file to store kind configuration
-	kindConfigurationFile, err := os.CreateTemp("", "kind-*.yaml")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err := os.Remove(kindConfigurationFile.Name())
-		if rerr == nil {
-			rerr = err
-		}
-	}()
-
-	// Write kind configuration. We create one worker Node for spot-migrator to drain an another
-	// worker Node to make sure there is a Node for cost-manager to be scheduled to
-	_, err = kindConfigurationFile.WriteString(fmt.Sprintf(`
-apiVersion: kind.x-k8s.io/v1alpha4
-kind: Cluster
-name: %s
-nodes:
-- role: control-plane
-- role: worker
-- role: worker
-`, kindClusterName))
-	if err != nil {
-		return err
-	}
-
-	err = runCommand("kind", "create", "cluster", "--config", kindConfigurationFile.Name())
+	err := runCommand("kind", "create", "cluster", "--name", kindClusterName, "--config", "./config/kind.yaml")
 	if err != nil {
 		return err
 	}
 
 	// Wait for all Nodes to be created
-	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+	kubeClient, _, err := kubernetes.NewClient()
 	if err != nil {
 		return err
 	}
@@ -245,7 +217,7 @@ podMonitor:
 	}
 
 	// Wait for the cost-manager Deployment to become available
-	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+	kubeClient, _, err := kubernetes.NewClient()
 	if err != nil {
 		return err
 	}

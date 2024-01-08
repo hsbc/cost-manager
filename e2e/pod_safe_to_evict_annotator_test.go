@@ -5,17 +5,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+// TestPodSafeToEvictAnnotator tests that pod-safe-to-evict-annotator correctly annotates all Pods
 func TestPodSafeToEvictAnnotator(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	kubeClient, err := client.NewWithWatch(config.GetConfigOrDie(), client.Options{})
+
+	kubeClient, _, err := kubernetes.NewClient()
 	require.Nil(t, err)
 
 	// Wait until all Pods have expected safe-to-evict annotation

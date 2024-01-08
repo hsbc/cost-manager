@@ -20,6 +20,8 @@ const (
 	prometheusAlertsInactiveDuration = 30 * time.Second
 )
 
+// TestPrometheusAlerts tests that all cost-manager PrometheusRule alerts are registered with
+// Prometheus and remain inactive for a period of time
 func TestPrometheusAlerts(t *testing.T) {
 	t.Parallel()
 

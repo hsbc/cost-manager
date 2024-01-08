@@ -24,6 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// TestSpotMigrator tests that spot-migrator successfully drains a worker Node while respecting
+// PodDisruptionBudgets and excludes control plane Nodes
 func TestSpotMigrator(t *testing.T) {
 	t.Parallel()
 

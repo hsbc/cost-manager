@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// TestPodSafeToEvictAnnotator tests that pod-safe-to-evict-annotator correctly annotates all Pods
 func TestPodSafeToEvictAnnotator(t *testing.T) {
 	t.Parallel()
 

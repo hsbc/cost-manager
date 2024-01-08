@@ -188,8 +188,7 @@ func TestSpotMigrator(t *testing.T) {
 	for {
 		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
 		require.Nil(t, err)
-		require.Equal(t, 1, len(results.(model.Vector)))
-		if results.(model.Vector)[0].Value > currentMetricValue {
+		if len(results.(model.Vector)) == 1 && results.(model.Vector)[0].Value > currentMetricValue {
 			break
 		}
 		time.Sleep(time.Second)

@@ -2,7 +2,7 @@
 
 cost-manager is a collection of Kubernetes
 [controllers](https://kubernetes.io/docs/concepts/architecture/controller/) that automate cost
-reductions for the cluster they are running on.
+optimisations.
 
 ## Controllers
 
@@ -119,6 +119,10 @@ Build Docker image and run E2E tests using [kind](https://github.com/kubernetes-
 ```sh
 make image e2e
 ```
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for details.
 
 ## Contributing
 

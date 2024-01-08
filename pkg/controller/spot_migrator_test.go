@@ -371,13 +371,18 @@ func TestSpotMigratorPrometheusMetricRegistration(t *testing.T) {
 	metricFamilies, err := metrics.Registry.Gather()
 	require.Nil(t, err)
 	spotMigratorDrainSuccessMetricFound := false
+	spotMigratorDrainFailureMetricFound := false
 	for _, metricFamily := range metricFamilies {
 		// This metric name should match with the corresponding PrometheusRule alert
 		if metricFamily.Name != nil && *metricFamily.Name == "cost_manager_spot_migrator_operation_success_total" {
 			spotMigratorDrainSuccessMetricFound = true
 		}
+		if metricFamily.Name != nil && *metricFamily.Name == "cost_manager_spot_migrator_operation_failure_total" {
+			spotMigratorDrainFailureMetricFound = true
+		}
 	}
 	require.True(t, spotMigratorDrainSuccessMetricFound)
+	require.True(t, spotMigratorDrainFailureMetricFound)
 }
 
 func TestAnnotateNode(t *testing.T) {

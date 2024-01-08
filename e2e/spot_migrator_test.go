@@ -34,6 +34,33 @@ func TestSpotMigrator(t *testing.T) {
 	kubeClient, restConfig, err := kubernetes.NewClient()
 	require.Nil(t, err)
 
+	// Port forward to Prometheus and create client using local forwarded port
+	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
+	require.Nil(t, err)
+	forwardedPort, stop, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
+	require.Nil(t, err)
+	defer func() {
+		err := stop()
+		require.Nil(t, err)
+	}()
+	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
+	prometheusClient, err := api.NewClient(api.Config{
+		Address: prometheusAddress,
+	})
+	require.Nil(t, err)
+	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
+
+	t.Log("Waiting for the failure metric to be scraped by Prometheus...")
+	for {
+		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_failure_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
+		require.Nil(t, err)
+		if len(results.(model.Vector)) == 1 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	t.Log("Failure metric has been scraped by Prometheus!")
+
 	// Find the worker Node to be drained by spot-migrator
 	workerNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
@@ -152,54 +179,23 @@ func TestSpotMigrator(t *testing.T) {
 
 	// Delete Node; typically this would be done by the node controller but we simulate it here:
 	// https://github.com/hsbc/cost-manager/blob/bf176ada100e19a765d276aee1a0a2d6038275e0/pkg/controller/spot_migrator.go#L242-L250
+	// We delay deletion for a short period of time to ensure that any issues with draining the Node
+	// or waiting for Node deletion are discovered due to the failure metric being incremented
+	time.Sleep(10 * time.Second)
 	err = kubeClient.Delete(ctx, node)
 	require.Nil(t, err)
-
-	// Wait for Prometheus metric to indicate successful migration
-	t.Log("Waiting for Prometheus metric to indicate successful migration...")
-	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
-	require.Nil(t, err)
-	// Port forward to Prometheus in the background
-	forwardedPort, close, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
-	require.Nil(t, err)
-	defer func() {
-		err := close()
-		require.Nil(t, err)
-	}()
-	// Setup Prometheus client using local forwarded port
-	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
-	prometheusClient, err := api.NewClient(api.Config{
-		Address: prometheusAddress,
-	})
-	require.Nil(t, err)
-	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
-	// Wait for the spot-migrator metric to be scraped by Prometheus...
-	var currentMetricValue model.SampleValue
-	for {
-		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
-		require.Nil(t, err)
-		if len(results.(model.Vector)) == 1 {
-			currentMetricValue = results.(model.Vector)[0].Value
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	// ...and then wait for it to increase
-	for {
-		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_success_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
-		require.Nil(t, err)
-		if len(results.(model.Vector)) == 1 && results.(model.Vector)[0].Value > currentMetricValue {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	t.Log("Migration successful!")
 
 	// Delete Namespace
 	err = kubeClient.Delete(ctx, namespace)
 	require.Nil(t, err)
 
-	// Finally, we verify that all control plane Nodes are schedulable
+	// Make sure that the failure metric was never incremented
+	results, _, err := prometheusAPI.Query(ctx, `sum(sum_over_time(cost_manager_spot_migrator_operation_failure_total{job="cost-manager",namespace="cost-manager"}[1h]))`, time.Now())
+	require.Nil(t, err)
+	require.Equal(t, 1, len(results.(model.Vector)))
+	require.True(t, results.(model.Vector)[0].Value == 0, "spot-migrator failure metric was incremented!")
+
+	// Finally, we verify that all control plane Nodes are still schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{

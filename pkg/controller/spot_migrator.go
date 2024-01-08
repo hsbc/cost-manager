@@ -48,6 +48,10 @@ var (
 		Name: "cost_manager_spot_migrator_operation_success_total",
 		Help: "The total number of successful spot-migrator operations",
 	})
+	spotMigratorOperationFailureTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "cost_manager_spot_migrator_operation_failure_total",
+		Help: "The total number of failed spot-migrator operations",
+	})
 
 	// Label to add to Nodes before draining to allow them to be identified if we are restarted
 	nodeSelectedForDeletionLabelKey = fmt.Sprintf("%s/%s", v1alpha1.GroupName, "selected-for-deletion")
@@ -73,6 +77,7 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 
 	// Register Prometheus metrics
 	metrics.Registry.MustRegister(spotMigratorOperationSuccessTotal)
+	metrics.Registry.MustRegister(spotMigratorOperationFailureTotal)
 
 	// Parse migration schedule
 	migrationSchedule := defaultMigrationSchedule
@@ -119,6 +124,7 @@ func (sm *spotMigrator) Start(ctx context.Context) error {
 			// We do not return the error to make sure other cost-manager processes/controllers
 			// continue to run; we rely on Prometheus metrics to alert us to failures
 			logger.Error(err, "Failed to run spot migration")
+			spotMigratorOperationFailureTotal.Inc()
 		}
 	}
 }

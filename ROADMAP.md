@@ -19,4 +19,4 @@ Kubernetes cost optimisations that could be automated as cost-manager controller
   running all the time (e.g. CI infrastructure or development clusters). On a schedule,
   [ResourceQuotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/) can be used to limit
   Pods in all Namespaces (except for the cost-manager Namespace) and then all Pods deleted to allow
-  the cluster to scale down. To scale back up, the ResourceQuotas can simply be deleted.
+  the cluster to scale down. To scale back up, the ResourceQuotas can simply be deleted

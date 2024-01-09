@@ -42,11 +42,15 @@ func main() {
 }
 
 func run(from, to string) error {
-	if from == "" {
-		return fmt.Errorf("Git reference to start from must be specified")
-	}
 	if to == "" {
 		to = "HEAD"
+	}
+	var err error
+	if from == "" {
+		from, err = previousTag(to)
+		if err != nil {
+			return err
+		}
 	}
 
 	cmd := exec.Command("git", "rev-list", fmt.Sprintf("%s..%s", from, to), "--pretty=format:%B")
@@ -105,4 +109,13 @@ func run(from, to string) error {
 	}
 
 	return nil
+}
+
+func previousTag(to string) (string, error) {
+	cmd := exec.Command("git", "describe", "--abbrev=0", "--tags", fmt.Sprintf("%s^", to))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }

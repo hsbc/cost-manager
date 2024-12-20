@@ -20,10 +20,9 @@ type CloudProvider interface {
 	IsSpotInstance(ctx context.Context, node *corev1.Node) (bool, error)
 	// DeleteInstance should drain connections from external load balancers to the Node and then
 	// delete the underlying instance. Implementations can assume that before this function is
-	// called the Node has already been modified to ensure that the KCCM service controller will
-	// eventually remove the Node from load balancing although this process may still be in progress
-	// when this function is called:
-	// https://kubernetes.io/docs/concepts/architecture/cloud-controller/#service-controller
+	// called Pods have already been drained from the Node and it has been tainted with
+	// ToBeDeletedByClusterAutoscaler to fail kube-proxy health checks as described in KEP-3836:
+	// https://github.com/kubernetes/enhancements/tree/27ef0d9a740ae5058472aac4763483f0e7218c0e/keps/sig-network/3836-kube-proxy-improved-ingress-connectivity-reliability
 	DeleteInstance(ctx context.Context, node *corev1.Node) error
 }
 

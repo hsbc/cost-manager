@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/pkg/errors"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
@@ -42,9 +44,18 @@ func NewCloudProvider(ctx context.Context) (*CloudProvider, error) {
 	}, nil
 }
 
-// DeleteInstance retrieves the underlying compute instance of the Kubernetes Node, drains any
-// connections from GCP load balancers and then deletes it from its managed instance group
+// DeleteInstance drains any connections from GCP load balancers, retrieves the underlying compute
+// instance of the Kubernetes Node and then deletes it from its managed instance group
 func (gcp *CloudProvider) DeleteInstance(ctx context.Context, node *corev1.Node) error {
+	// GCP Network Load Balancer health checks have an interval of 8 seconds with a timeout of 1
+	// second and an unhealthy threshold of 3 so we wait for 3 * 8 + 1 = 25 seconds for instances to
+	// be marked as unhealthy which triggers connection draining. We add an additional 30 seconds
+	// since this is the connection draining timeout used when GKE subsetting is enabled. We then
+	// add an additional 5 seconds to allow processing time for the various components involved
+	// (e.g. GCP probes and kube-proxy):
+	// https://github.com/kubernetes/cloud-provider-gcp/blob/041c3f47cd8e7e5b7a3954c603255a12e725c78b/providers/gce/gce.go#L75-L82
+	time.Sleep(time.Minute - timeSinceToBeDeletedTaintAdded(node, time.Now()))
+
 	// Retrieve instance details from the provider ID
 	project, zone, instanceName, err := parseProviderID(node.Spec.ProviderID)
 	if err != nil {
@@ -198,4 +209,28 @@ func (gcp *CloudProvider) IsSpotInstance(ctx context.Context, node *corev1.Node)
 		return false, nil
 	}
 	return node.Labels[spotNodeLabelKey] == "true" || node.Labels[preemptibleNodeLabelKey] == "true", nil
+}
+
+func timeSinceToBeDeletedTaintAdded(node *corev1.Node, now time.Time) time.Duration {
+	// Retrieve taint value
+	toBeDeletedTaintAddedValue := ""
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == kubernetes.ToBeDeletedTaint && taint.Value == "ToBeDeletedByClusterAutoscaler" {
+			toBeDeletedTaintAddedValue = taint.Value
+			break
+		}
+	}
+
+	// Attempt to parse taint value as Unix timestamp
+	unixTimeSeconds, err := strconv.ParseInt(toBeDeletedTaintAddedValue, 10, 64)
+	if err != nil {
+		return 0
+	}
+
+	timeSinceToBeDeletedTaintAdded := now.Sub(time.Unix(unixTimeSeconds, 0))
+	// Ignore negative durations to avoid waiting for an unbounded amount of time
+	if timeSinceToBeDeletedTaintAdded < 0 {
+		return 0
+	}
+	return timeSinceToBeDeletedTaintAdded
 }

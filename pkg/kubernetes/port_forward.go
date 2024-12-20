@@ -19,7 +19,7 @@ import (
 // port which is returned as well as a function to stop the port forward when finished
 func PortForward(ctx context.Context, restConfig *rest.Config, podNamespace, podName string, port int) (uint16, func() error, error) {
 	stopChan, readyChan, errChan := make(chan struct{}, 1), make(chan struct{}, 1), make(chan error, 1)
-	forwarder, err := createForwarder(ctx, restConfig, stopChan, readyChan, podNamespace, podName, port)
+	forwarder, err := createForwarder(restConfig, stopChan, readyChan, podNamespace, podName, port)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -53,7 +53,7 @@ func PortForward(ctx context.Context, restConfig *rest.Config, podNamespace, pod
 	return forwardedPorts[0].Local, stop, nil
 }
 
-func createForwarder(ctx context.Context, restConfig *rest.Config, stopChan, readyChan chan struct{}, podNamespace, podName string, port int) (*portforward.PortForwarder, error) {
+func createForwarder(restConfig *rest.Config, stopChan, readyChan chan struct{}, podNamespace, podName string, port int) (*portforward.PortForwarder, error) {
 	// Discard output to avoid race conditions
 	out, errOut := io.Discard, io.Discard
 

@@ -34,11 +34,6 @@ const (
 	// https://pkg.go.dev/github.com/robfig/cron#hdr-Predefined_schedules
 	defaultMigrationSchedule = "@hourly"
 
-	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L39-L40
-	toBeDeletedTaint = "ToBeDeletedByClusterAutoscaler"
-	// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L41-L42
-	deletionCandidateTaint = "DeletionCandidateOfClusterAutoscaler"
-
 	// https://kubernetes.io/docs/reference/labels-annotations-taints/#node-role-kubernetes-io-control-plane
 	controlPlaneNodeRoleLabelKey = "node-role.kubernetes.io/control-plane"
 )
@@ -158,7 +153,7 @@ func (sm *spotMigrator) run(ctx context.Context) error {
 		}
 
 		// Select one of the on-demand Nodes to delete
-		onDemandNode, err := selectNodeForDeletion(ctx, beforeDrainOnDemandNodes)
+		onDemandNode, err := selectNodeForDeletion(beforeDrainOnDemandNodes)
 		if err != nil {
 			return err
 		}
@@ -231,12 +226,12 @@ func (sm *spotMigrator) drainAndDeleteNode(ctx context.Context, node *corev1.Nod
 	}
 	logger.Info("Drained Node successfully")
 
-	logger.Info("Excluding Node from external load balancing")
-	err = sm.excludeNodeFromExternalLoadBalancing(ctx, node)
+	logger.Info("Adding taint ToBeDeletedByClusterAutoscaler")
+	err = sm.addToBeDeletedTaint(ctx, node)
 	if err != nil {
 		return err
 	}
-	logger.Info("Node excluded from external load balancing successfully")
+	logger.Info("Taint ToBeDeletedByClusterAutoscaler added successfully")
 
 	logger.Info("Deleting instance")
 	err = sm.CloudProvider.DeleteInstance(ctx, node)
@@ -278,14 +273,11 @@ func isSelectedForDeletion(node *corev1.Node) bool {
 	return ok && value == "true"
 }
 
-func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context, node *corev1.Node) error {
-	// Adding the cluster autoscaler taint will tell the KCCM service controller to exclude the Node
-	// from load balancing. This may or may not trigger connection draining depending on provider:
-	// https://github.com/kubernetes/kubernetes/blob/b5ba7bc4f5f49760c821cae2f152a8000922e72e/staging/src/k8s.io/cloud-provider/controllers/service/controller.go#L1043-L1051
-	// Once KEP-3836 has been implemented the cluster autoscaler taint will start failing the
-	// kube-proxy health check to trigger proper connection draining:
-	// https://github.com/kubernetes/enhancements/tree/27ef0d9a740ae5058472aac4763483f0e7218c0e/keps/sig-network/3836-kube-proxy-improved-ingress-connectivity-reliability
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+// addToBeDeletedTaint adds the ToBeDeletedByClusterAutoscaler taint to the Node to tell kube-proxy
+// to start failing its healthz and subsequently load balancer health checks depending on provider:
+// https://github.com/kubernetes/enhancements/tree/27ef0d9a740ae5058472aac4763483f0e7218c0e/keps/sig-network/3836-kube-proxy-improved-ingress-connectivity-reliability
+func (sm *spotMigrator) addToBeDeletedTaint(ctx context.Context, node *corev1.Node) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		node, err := sm.Clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -293,7 +285,7 @@ func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context
 
 		hasToBeDeletedTaint := false
 		for _, taint := range node.Spec.Taints {
-			if taint.Key == toBeDeletedTaint {
+			if taint.Key == kubernetes.ToBeDeletedTaint {
 				hasToBeDeletedTaint = true
 				break
 			}
@@ -301,7 +293,7 @@ func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context
 		if !hasToBeDeletedTaint {
 			// https://github.com/kubernetes/autoscaler/blob/5bf33b23f2bcf5f9c8ccaf99d445e25366ee7f40/cluster-autoscaler/utils/taints/taints.go#L166-L174
 			node.Spec.Taints = append(node.Spec.Taints, corev1.Taint{
-				Key:    toBeDeletedTaint,
+				Key:    kubernetes.ToBeDeletedTaint,
 				Value:  fmt.Sprint(time.Now().Unix()),
 				Effect: corev1.TaintEffectNoSchedule,
 			})
@@ -313,23 +305,6 @@ func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context
 
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	// We also add the node.kubernetes.io/exclude-from-external-load-balancers label since this
-	// triggers instant KCCM service controller reconciliation instead of having to wait for the
-	// Node sync period:
-	// https://kubernetes.io/docs/reference/labels-annotations-taints/#node-kubernetes-io-exclude-from-external-load-balancers
-	// https://github.com/kubernetes/kubernetes/blob/b5ba7bc4f5f49760c821cae2f152a8000922e72e/staging/src/k8s.io/cloud-provider/controllers/service/controller.go#L699-L712
-	// https://github.com/kubernetes/kubernetes/blob/b5ba7bc4f5f49760c821cae2f152a8000922e72e/staging/src/k8s.io/cloud-provider/controllers/service/controller.go#L54-L55
-	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"true"}}}`, corev1.LabelNodeExcludeBalancers))
-	_, err = sm.Clientset.CoreV1().Nodes().Patch(ctx, node.Name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		return errors.Wrapf(err, "failed to label Node %s", node.Name)
-	}
-
-	return nil
 }
 
 // selectNodeForDeletion attempts the find the best Node to delete using the following algorithm:
@@ -338,7 +313,7 @@ func (sm *spotMigrator) excludeNodeFromExternalLoadBalancing(ctx context.Context
 // 3. Otherwise if there are any Nodes marked for deletion by the cluster-autoscaler then return the oldest
 // 4. Otherwise if there are any Nodes that are not running spot-migrator then return the oldest
 // 5. Otherwise return the oldest Node
-func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.Node, error) {
+func selectNodeForDeletion(nodes []*corev1.Node) (*corev1.Node, error) {
 	// There should always be at least 1 Node to select from
 	if len(nodes) == 0 {
 		return nil, errors.New("failed to select Node from empty list")
@@ -372,7 +347,7 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 	for _, node := range nodes {
 		for _, taint := range node.Spec.Taints {
 			// https://github.com/kubernetes/autoscaler/blob/299c9637229fb2bf849c1d86243fe2948d14101e/cluster-autoscaler/utils/taints/taints.go#L119
-			if taint.Key == toBeDeletedTaint && taint.Effect == corev1.TaintEffectNoSchedule {
+			if taint.Key == kubernetes.ToBeDeletedTaint && taint.Effect == corev1.TaintEffectNoSchedule {
 				return node, nil
 			}
 		}
@@ -383,7 +358,7 @@ func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.N
 	for _, node := range nodes {
 		for _, taint := range node.Spec.Taints {
 			// https://github.com/kubernetes/autoscaler/blob/299c9637229fb2bf849c1d86243fe2948d14101e/cluster-autoscaler/utils/taints/taints.go#L124
-			if taint.Key == deletionCandidateTaint && taint.Effect == corev1.TaintEffectPreferNoSchedule {
+			if taint.Key == kubernetes.DeletionCandidateTaint && taint.Effect == corev1.TaintEffectPreferNoSchedule {
 				return node, nil
 			}
 		}

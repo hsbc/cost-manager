@@ -1,7 +1,6 @@
 package gcp
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -33,7 +32,7 @@ func getManagedInstanceGroupFromInstance(instance *compute.Instance) (string, er
 	return "", fmt.Errorf("failed to determine managed instance group for instance %s", instance.Name)
 }
 
-func (gcp *CloudProvider) waitForManagedInstanceGroupStability(ctx context.Context, project, zone, managedInstanceGroupName string) error {
+func (gcp *CloudProvider) waitForManagedInstanceGroupStability(project, zone, managedInstanceGroupName string) error {
 	for {
 		r, err := gcp.computeService.InstanceGroupManagers.Get(project, zone, managedInstanceGroupName).Do()
 		if err != nil {
@@ -46,13 +45,13 @@ func (gcp *CloudProvider) waitForManagedInstanceGroupStability(ctx context.Conte
 	}
 }
 
-func (gcp *CloudProvider) waitForZonalComputeOperation(ctx context.Context, project, zone, operationName string) error {
-	return waitForComputeOperation(ctx, project, func() (*compute.Operation, error) {
+func (gcp *CloudProvider) waitForZonalComputeOperation(project, zone, operationName string) error {
+	return waitForComputeOperation(func() (*compute.Operation, error) {
 		return gcp.computeService.ZoneOperations.Get(project, zone, operationName).Do()
 	})
 }
 
-func waitForComputeOperation(ctx context.Context, project string, getOperation func() (*compute.Operation, error)) error {
+func waitForComputeOperation(getOperation func() (*compute.Operation, error)) error {
 	for {
 		operation, err := getOperation()
 		if err != nil {

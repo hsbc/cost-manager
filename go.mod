@@ -1,6 +1,6 @@
 module github.com/hsbc/cost-manager
 
-go 1.21.3
+go 1.23.4
 
 require (
 	github.com/go-logr/logr v1.3.0

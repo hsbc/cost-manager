@@ -2,7 +2,9 @@ package gcp
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -77,6 +79,56 @@ func TestIsSpotInstance(t *testing.T) {
 			isSpotInstance, err := cloudProvider.IsSpotInstance(context.Background(), test.node)
 			require.Nil(t, err)
 			require.Equal(t, test.isSpotInstance, isSpotInstance)
+		})
+	}
+}
+
+func TestTimeSinceToBeDeletedTaintAdded(t *testing.T) {
+	tests := map[string]struct {
+		node                           *corev1.Node
+		now                            time.Time
+		timeSinceToBeDeletedTaintAdded time.Duration
+	}{
+		"missingTaint": {
+			node:                           &corev1.Node{},
+			now:                            time.Now(),
+			timeSinceToBeDeletedTaintAdded: 0,
+		},
+		"recentTaint": {
+			node: &corev1.Node{
+				Spec: corev1.NodeSpec{
+					Taints: []corev1.Taint{
+						{
+							Key:    "ToBeDeletedByClusterAutoscaler",
+							Value:  fmt.Sprint(time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC).Unix()),
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+			now:                            time.Date(0, 0, 0, 0, 1, 0, 0, time.UTC),
+			timeSinceToBeDeletedTaintAdded: time.Minute,
+		},
+		"futureTaint": {
+			node: &corev1.Node{
+				Spec: corev1.NodeSpec{
+					Taints: []corev1.Taint{
+						{
+							Key:    "ToBeDeletedByClusterAutoscaler",
+							Value:  fmt.Sprint(time.Date(0, 0, 0, 0, 1, 0, 0, time.UTC).Unix()),
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+			now:                            time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
+			timeSinceToBeDeletedTaintAdded: 0,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			timeSinceToBeDeletedTaintAdded := timeSinceToBeDeletedTaintAdded(test.node, test.now)
+			require.Equal(t, test.timeSinceToBeDeletedTaintAdded, timeSinceToBeDeletedTaintAdded)
 		})
 	}
 }

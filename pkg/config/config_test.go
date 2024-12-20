@@ -22,6 +22,7 @@ kind: CostManagerConfiguration
 controllers:
 - spot-migrator
 - pod-safe-to-evict-annotator
+- scheduled-pod-limiter
 cloudProvider:
   name: gcp
 spotMigrator:
@@ -33,6 +34,18 @@ podSafeToEvictAnnotator:
       operator: In
       values:
       - kube-system
+scheduledPodLimiter:
+  namespaceSelector:
+    matchExpressions:
+	- key: kubernetes.io/metadata.name
+	  operator: NotIn
+	  values:
+	  - kube-system
+	  - cost-manager
+  schedulePolicy:
+    startSchedule: "0 8 * * Mon-Fri"
+	stopSchedule: "0 18 * * Mon-Fri"
+	timeZone: "Europe/London"
 `),
 			valid: true,
 			config: &v1alpha1.CostManagerConfiguration{

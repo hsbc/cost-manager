@@ -146,3 +146,7 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+// Replace cron library with fork containing Prev function: https://github.com/robfig/cron/pull/437
+// go mod edit -replace github.com/robfig/cron/v3=github.com/juliev0/cron/v3@7181f74c09e99418674d5ef1e438066a4b841a7a
+replace github.com/robfig/cron/v3 => github.com/juliev0/cron/v3 v3.0.2-0.20220310063235-7181f74c09e9

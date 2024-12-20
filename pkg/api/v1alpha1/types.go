@@ -13,6 +13,7 @@ type CostManagerConfiguration struct {
 	CloudProvider           CloudProvider            `json:"cloudProvider"`
 	SpotMigrator            *SpotMigrator            `json:"spotMigrator,omitempty"`
 	PodSafeToEvictAnnotator *PodSafeToEvictAnnotator `json:"podSafeToEvictAnnotator,omitempty"`
+	ScheduledPodLimiter     *ScheduledPodLimiter     `json:"scheduledPodLimiter,omitempty"`
 }
 
 type CloudProvider struct {
@@ -25,4 +26,15 @@ type SpotMigrator struct {
 
 type PodSafeToEvictAnnotator struct {
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+}
+
+type ScheduledPodLimiter struct {
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	SchedulePolicy    *SchedulePolicy       `json:"schedulePolicy,omitempty"`
+}
+
+type SchedulePolicy struct {
+	StartSchedule string `json:"startSchedule,omitempty"`
+	StopSchedule  string `json:"stopSchedule,omitempty"`
+	TimeZone      string `json:"timeZone,omitempty"`
 }

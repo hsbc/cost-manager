@@ -96,6 +96,7 @@ config:
   controllers:
   - spot-migrator
   - pod-safe-to-evict-annotator
+  - scheduled-pod-limiter
   cloudProvider:
     name: gcp
   podSafeToEvictAnnotator:

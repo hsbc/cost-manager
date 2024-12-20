@@ -106,8 +106,8 @@ func TestTimeSinceToBeDeletedTaintAdded(t *testing.T) {
 					},
 				},
 			},
-			now:                            time.Date(0, 0, 0, 0, 0, 60, 0, time.UTC),
-			timeSinceToBeDeletedTaintAdded: 60 * time.Second,
+			now:                            time.Date(0, 0, 0, 0, 1, 0, 0, time.UTC),
+			timeSinceToBeDeletedTaintAdded: time.Minute,
 		},
 		"futureTaint": {
 			node: &corev1.Node{
@@ -115,7 +115,7 @@ func TestTimeSinceToBeDeletedTaintAdded(t *testing.T) {
 					Taints: []corev1.Taint{
 						{
 							Key:    "ToBeDeletedByClusterAutoscaler",
-							Value:  fmt.Sprint(time.Date(0, 0, 0, 0, 0, 60, 0, time.UTC).Unix()),
+							Value:  fmt.Sprint(time.Date(0, 0, 0, 0, 1, 0, 0, time.UTC).Unix()),
 							Effect: corev1.TaintEffectNoSchedule,
 						},
 					},

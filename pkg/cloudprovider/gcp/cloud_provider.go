@@ -215,7 +215,7 @@ func timeSinceToBeDeletedTaintAdded(node *corev1.Node, now time.Time) time.Durat
 	// Retrieve taint value
 	toBeDeletedTaintAddedValue := ""
 	for _, taint := range node.Spec.Taints {
-		if taint.Key == kubernetes.ToBeDeletedTaint && taint.Value == "ToBeDeletedByClusterAutoscaler" {
+		if taint.Key == kubernetes.ToBeDeletedTaint && taint.Effect == corev1.TaintEffectNoSchedule {
 			toBeDeletedTaintAddedValue = taint.Value
 			break
 		}

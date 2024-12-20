@@ -153,7 +153,7 @@ func (sm *spotMigrator) run(ctx context.Context) error {
 		}
 
 		// Select one of the on-demand Nodes to delete
-		onDemandNode, err := selectNodeForDeletion(ctx, beforeDrainOnDemandNodes)
+		onDemandNode, err := selectNodeForDeletion(beforeDrainOnDemandNodes)
 		if err != nil {
 			return err
 		}
@@ -313,7 +313,7 @@ func (sm *spotMigrator) addToBeDeletedTaint(ctx context.Context, node *corev1.No
 // 3. Otherwise if there are any Nodes marked for deletion by the cluster-autoscaler then return the oldest
 // 4. Otherwise if there are any Nodes that are not running spot-migrator then return the oldest
 // 5. Otherwise return the oldest Node
-func selectNodeForDeletion(ctx context.Context, nodes []*corev1.Node) (*corev1.Node, error) {
+func selectNodeForDeletion(nodes []*corev1.Node) (*corev1.Node, error) {
 	// There should always be at least 1 Node to select from
 	if len(nodes) == 0 {
 		return nil, errors.New("failed to select Node from empty list")

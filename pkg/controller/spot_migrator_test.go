@@ -75,7 +75,7 @@ func TestSpotMigratorNodeCreatedTrueOnNodeCreate(t *testing.T) {
 
 func TestSpotMigratorSelectNodeForDeletionErrorOnEmptyList(t *testing.T) {
 	nodes := []*corev1.Node{}
-	_, err := selectNodeForDeletion(context.Background(), nodes)
+	_, err := selectNodeForDeletion(nodes)
 	require.NotNil(t, err)
 }
 
@@ -115,7 +115,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferOldest(t *testing.T) {
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.Background(), nodes)
+	node, err := selectNodeForDeletion(nodes)
 	require.Nil(t, err)
 	require.Equal(t, "oldest", node.Name)
 }
@@ -158,7 +158,7 @@ func TestSpotMigratorSelectNodeForDeletionDoNotPreferLocalNode(t *testing.T) {
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.Background(), nodes)
+	node, err := selectNodeForDeletion(nodes)
 	require.Nil(t, err)
 	require.Equal(t, "secondoldest", node.Name)
 }
@@ -205,7 +205,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferNodesMarkedPreferNoScheduleByClu
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.Background(), nodes)
+	node, err := selectNodeForDeletion(nodes)
 	require.Nil(t, err)
 	require.Equal(t, "secondoldest", node.Name)
 }
@@ -258,7 +258,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferNodesMarkedNoScheduleByClusterAu
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.Background(), nodes)
+	node, err := selectNodeForDeletion(nodes)
 	require.Nil(t, err)
 	require.Equal(t, "thirdoldest", node.Name)
 }
@@ -297,7 +297,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferUnschedulable(t *testing.T) {
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.Background(), nodes)
+	node, err := selectNodeForDeletion(nodes)
 	require.Nil(t, err)
 	require.True(t, node.Spec.Unschedulable)
 }
@@ -339,7 +339,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferSelectedForDeletion(t *testing.T
 			},
 		},
 	}
-	node, err := selectNodeForDeletion(context.Background(), nodes)
+	node, err := selectNodeForDeletion(nodes)
 	require.Nil(t, err)
 	require.True(t, isSelectedForDeletion(node))
 }

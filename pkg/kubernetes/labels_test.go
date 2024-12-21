@@ -115,7 +115,7 @@ func TestMatchesLabels(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			matches, err := SelectorMatchesLabels(test.selector, test.labels)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, test.shouldMatch, matches)
 		})
 	}

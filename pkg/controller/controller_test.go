@@ -64,7 +64,7 @@ func TestSetupWithManager(t *testing.T) {
 			if test.shouldSucceed {
 				require.NoError(t, err)
 			} else {
-				require.NotNil(t, err)
+				require.Error(t, err)
 			}
 		})
 	}

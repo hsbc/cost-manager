@@ -30,5 +30,5 @@ func TestGenerateLongResourceNameTruncatedTo62CharactersXxxX(t *testing.T) {
 
 func TestGenerateDeployment(t *testing.T) {
 	_, err := GenerateDeployment("test", "test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 }

@@ -76,7 +76,7 @@ func TestSpotMigratorNodeCreatedTrueOnNodeCreate(t *testing.T) {
 func TestSpotMigratorSelectNodeForDeletionErrorOnEmptyList(t *testing.T) {
 	nodes := []*corev1.Node{}
 	_, err := selectNodeForDeletion(nodes)
-	require.NotNil(t, err)
+	require.Error(t, err)
 }
 
 func TestSpotMigratorSelectNodeForDeletionPreferOldest(t *testing.T) {

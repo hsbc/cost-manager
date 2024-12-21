@@ -193,7 +193,7 @@ func TestSpotMigrator(t *testing.T) {
 	results, _, err := prometheusAPI.Query(ctx, `sum(sum_over_time(cost_manager_spot_migrator_operation_failure_total{job="cost-manager",namespace="cost-manager"}[1h]))`, time.Now())
 	require.NoError(t, err)
 	require.Len(t, results.(model.Vector), 1)
-	require.InEpsilon(t, 0, float64(results.(model.Vector)[0].Value), 0.5, "spot-migrator failure metric was incremented!")
+	require.InDelta(t, 0, float64(results.(model.Vector)[0].Value), 0.5, "spot-migrator failure metric was incremented!")
 
 	// Finally, we verify that all control plane Nodes are still schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{

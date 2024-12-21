@@ -108,7 +108,7 @@ foo: bar
 				require.Nil(t, err)
 				require.Equal(t, test.config, config)
 			} else {
-				require.NotNil(t, err)
+				require.Error(t, err)
 			}
 		})
 	}
@@ -142,7 +142,7 @@ func TestValidate(t *testing.T) {
 			if test.valid {
 				require.Nil(t, err)
 			} else {
-				require.NotNil(t, err)
+				require.Error(t, err)
 			}
 		})
 	}

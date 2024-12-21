@@ -79,7 +79,7 @@ func TestSpotMigrator(t *testing.T) {
 	nodeList := &corev1.NodeList{}
 	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: workerNodeSelector})
 	require.Nil(t, err)
-	require.Greater(t, len(nodeList.Items), 0)
+	require.NotEmpty(t, nodeList.Items)
 	nodeName := nodeList.Items[0].Name
 
 	// Deploy a workload to the worker Node
@@ -192,8 +192,8 @@ func TestSpotMigrator(t *testing.T) {
 	// Make sure that the failure metric was never incremented
 	results, _, err := prometheusAPI.Query(ctx, `sum(sum_over_time(cost_manager_spot_migrator_operation_failure_total{job="cost-manager",namespace="cost-manager"}[1h]))`, time.Now())
 	require.Nil(t, err)
-	require.Equal(t, 1, len(results.(model.Vector)))
-	require.True(t, results.(model.Vector)[0].Value == 0, "spot-migrator failure metric was incremented!")
+	require.Len(t, results.(model.Vector), 1)
+	require.Equal(t, 0, results.(model.Vector)[0].Value, "spot-migrator failure metric was incremented!")
 
 	// Finally, we verify that all control plane Nodes are still schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
@@ -208,7 +208,7 @@ func TestSpotMigrator(t *testing.T) {
 	nodeList = &corev1.NodeList{}
 	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: controlPlaneNodeSelector})
 	require.Nil(t, err)
-	require.Greater(t, len(nodeList.Items), 0)
+	require.NotEmpty(t, nodeList.Items)
 	for _, node := range nodeList.Items {
 		require.False(t, node.Spec.Unschedulable)
 	}

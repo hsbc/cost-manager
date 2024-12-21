@@ -12,7 +12,7 @@ func TestGenerateResourceName(t *testing.T) {
 
 func TestGenerateLongResourceNameTruncatedTo63CharactersXxxxx(t *testing.T) {
 	actual := GenerateResourceName(t)
-	require.Equal(t, 63, len(actual))
+	require.Len(t, actual, 63)
 
 	expected := "test-generate-long-resource-name-truncated-to63-characters-xxxx"
 	require.Equal(t, expected, actual)
@@ -22,7 +22,7 @@ func TestGenerateLongResourceNameTruncatedTo63CharactersXxxxx(t *testing.T) {
 // be a hyphen which gets truncated
 func TestGenerateLongResourceNameTruncatedTo62CharactersXxxX(t *testing.T) {
 	actual := GenerateResourceName(t)
-	require.Equal(t, 62, len(actual))
+	require.Len(t, actual, 62)
 
 	expected := "test-generate-long-resource-name-truncated-to62-characters-xxx"
 	require.Equal(t, expected, actual)

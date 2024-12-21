@@ -18,17 +18,17 @@ func TestPodSafeToEvictAnnotator(t *testing.T) {
 	ctx := context.Background()
 
 	kubeClient, _, err := kubernetes.NewClient()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Wait until all Pods have expected safe-to-evict annotation
 	for {
 		success, err := allPodsHaveExpectedSafeToEvictAnnotation(ctx, kubeClient)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if success {
 			// Make sure condition still holds after 2 seconds
 			time.Sleep(2 * time.Second)
 			stillSuccess, err := allPodsHaveExpectedSafeToEvictAnnotation(ctx, kubeClient)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.True(t, stillSuccess)
 			break
 		}

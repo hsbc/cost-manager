@@ -116,13 +116,13 @@ func TestSpotMigratorSelectNodeForDeletionPreferOldest(t *testing.T) {
 		},
 	}
 	node, err := selectNodeForDeletion(nodes)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, "oldest", node.Name)
 }
 
 func TestSpotMigratorSelectNodeForDeletionDoNotPreferLocalNode(t *testing.T) {
 	err := os.Setenv("NODE_NAME", "oldest")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	nodes := []*corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -159,7 +159,7 @@ func TestSpotMigratorSelectNodeForDeletionDoNotPreferLocalNode(t *testing.T) {
 		},
 	}
 	node, err := selectNodeForDeletion(nodes)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, "secondoldest", node.Name)
 }
 
@@ -206,7 +206,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferNodesMarkedPreferNoScheduleByClu
 		},
 	}
 	node, err := selectNodeForDeletion(nodes)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, "secondoldest", node.Name)
 }
 
@@ -259,7 +259,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferNodesMarkedNoScheduleByClusterAu
 		},
 	}
 	node, err := selectNodeForDeletion(nodes)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, "thirdoldest", node.Name)
 }
 
@@ -298,7 +298,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferUnschedulable(t *testing.T) {
 		},
 	}
 	node, err := selectNodeForDeletion(nodes)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, node.Spec.Unschedulable)
 }
 
@@ -340,7 +340,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferSelectedForDeletion(t *testing.T
 		},
 	}
 	node, err := selectNodeForDeletion(nodes)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, isSelectedForDeletion(node))
 }
 
@@ -350,7 +350,7 @@ func TestSpotMigratorSelectNodeForDeletionPreferSelectedForDeletion(t *testing.T
 // than the activation interval. For example, `@every 1h` would fail this test
 func TestSpotMigratorDefaultMigrationScheduleHasFixedActivationTimes(t *testing.T) {
 	parsedMigrationSchedule, err := parseMigrationSchedule(defaultMigrationSchedule)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testTime := time.Date(00, 00, 00, 00, 00, 00, 00, time.UTC)
 	require.Equal(t, parsedMigrationSchedule.Next(testTime), parsedMigrationSchedule.Next(testTime.Add(time.Second)))
@@ -365,11 +365,11 @@ func TestSpotMigratorPrometheusMetricRegistration(t *testing.T) {
 	err := (&spotMigrator{
 		Clientset: fake.NewSimpleClientset(),
 	}).Start(ctx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Make sure Prometheus metric has been registered
 	metricFamilies, err := metrics.Registry.Gather()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	spotMigratorDrainSuccessMetricFound := false
 	spotMigratorDrainFailureMetricFound := false
 	for _, metricFamily := range metricFamilies {
@@ -396,11 +396,11 @@ func TestAnnotateNode(t *testing.T) {
 			Name: "test",
 		},
 	}, metav1.CreateOptions{})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = sm.addSelectedForDeletionLabel(ctx, node.Name)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	node, err = clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, isSelectedForDeletion(node))
 }
 
@@ -467,10 +467,10 @@ func TestAddToBeDeletedTaint(t *testing.T) {
 	}
 
 	err := sm.addToBeDeletedTaint(ctx, node)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	node, err = sm.Clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	hasToBeDeletedTaint := false
 	for _, taint := range node.Spec.Taints {
@@ -572,7 +572,7 @@ func TestListOnDemandNodes(t *testing.T) {
 			}
 
 			onDemandNodes, err := sm.listOnDemandNodes(ctx)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, test.onDemandNodes, onDemandNodes)
 		})
 	}

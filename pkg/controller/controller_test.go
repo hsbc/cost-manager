@@ -47,7 +47,7 @@ func TestSetupWithManager(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Create manager
 			scheme, err := kubernetes.NewScheme()
-			require.Nil(t, err)
+			require.NoError(t, err)
 			mgr, err := ctrl.NewManager(&rest.Config{}, manager.Options{
 				Scheme: scheme,
 				Controller: config.Controller{
@@ -56,13 +56,13 @@ func TestSetupWithManager(t *testing.T) {
 					SkipNameValidation: ptr.Bool(true),
 				},
 			})
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			// Setup manager...
 			err = SetupWithManager(context.Background(), mgr, test.config)
 			// ...and verify success
 			if test.shouldSucceed {
-				require.Nil(t, err)
+				require.NoError(t, err)
 			} else {
 				require.NotNil(t, err)
 			}

@@ -2,11 +2,15 @@ linters:
   disable-all: true
   enable:
   - errcheck
+  - gofmt
+  - goimports
   - gosec
   - gosimple
   - govet
   - ineffassign
   - misspell
   - staticcheck
+  - stylecheck
+  - testifylint
   - unused
   - whitespace

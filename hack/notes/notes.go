@@ -53,6 +53,7 @@ func run(from, to string) error {
 		}
 	}
 
+	//#nosec G204
 	cmd := exec.Command("git", "rev-list", fmt.Sprintf("%s..%s", from, to), "--pretty=format:%B")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -112,6 +113,7 @@ func run(from, to string) error {
 }
 
 func previousTag(to string) (string, error) {
+	//#nosec G204
 	cmd := exec.Command("git", "describe", "--abbrev=0", "--tags", fmt.Sprintf("%s^", to))
 	out, err := cmd.CombinedOutput()
 	if err != nil {

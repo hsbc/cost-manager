@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hsbc/cost-manager/pkg/api/v1alpha1"
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
@@ -34,6 +35,7 @@ var _ reconcile.Reconciler = &podSafeToEvictAnnotator{}
 func (r *podSafeToEvictAnnotator) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
+		Named(strings.ReplaceAll(podSafeToEvictAnnotatorControllerName, "-", "_")).
 		Complete(r)
 }
 

@@ -7,11 +7,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
-	apiwatch "k8s.io/apimachinery/pkg/watch"
 )
 
 func TestParseWatchEventPodObject(t *testing.T) {
-	event := apiwatch.Event{
+	event := watch.Event{
 		Object: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -26,7 +25,7 @@ func TestParseWatchEventPodObject(t *testing.T) {
 }
 
 func TestParseWatchEventErrorObject(t *testing.T) {
-	event := apiwatch.Event{
+	event := watch.Event{
 		Type: watch.Error,
 		Object: &metav1.Status{
 			Message: "message",

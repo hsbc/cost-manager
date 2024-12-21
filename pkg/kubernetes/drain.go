@@ -21,7 +21,7 @@ const (
 	nodeDrainTimeout = time.Hour
 )
 
-// We use the default drain implementation:
+// DrainNode uses the default drain implementation to drain the Node:
 // https://github.com/kubernetes/kubectl/blob/3ec401449e5821ad954942c7ecec9d2c90ecaaa1/pkg/drain/default.go
 func DrainNode(ctx context.Context, clientset kubernetes.Interface, node *corev1.Node) error {
 	// https://github.com/kubernetes/kubectl/blob/3ec401449e5821ad954942c7ecec9d2c90ecaaa1/pkg/cmd/drain/drain.go#L147-L160

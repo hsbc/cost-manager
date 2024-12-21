@@ -45,8 +45,8 @@ func run(from, to string) error {
 	if to == "" {
 		to = "HEAD"
 	}
-	var err error
 	if from == "" {
+		var err error
 		from, err = previousTag(to)
 		if err != nil {
 			return err

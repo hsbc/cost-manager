@@ -18,6 +18,9 @@ generate: controller-gen
 	$(BIN_DIR)/controller-gen object \
 		paths=./pkg/api/...
 
+verify: generate
+	git diff --exit-code
+
 # https://book.kubebuilder.io/reference/controller-gen
 controller-gen:
-	go build -o $(BIN_DIR)/controller-gen sigs.k8s.io/controller-tools/cmd/controller-gen
+	ls $(BIN_DIR)/controller-gen || go build -o $(BIN_DIR)/controller-gen sigs.k8s.io/controller-tools/cmd/controller-gen

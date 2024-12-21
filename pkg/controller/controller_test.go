@@ -9,7 +9,9 @@ import (
 	"github.com/hsbc/cost-manager/pkg/kubernetes"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/rest"
+	"knative.dev/pkg/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -46,7 +48,14 @@ func TestSetupWithManager(t *testing.T) {
 			// Create manager
 			scheme, err := kubernetes.NewScheme()
 			require.Nil(t, err)
-			mgr, err := ctrl.NewManager(&rest.Config{}, manager.Options{Scheme: scheme})
+			mgr, err := ctrl.NewManager(&rest.Config{}, manager.Options{
+				Scheme: scheme,
+				Controller: config.Controller{
+					// Required during testing to avoid validation errors:
+					// https://github.com/kubernetes-sigs/controller-runtime/issues/2937#issuecomment-2325280073
+					SkipNameValidation: ptr.Bool(true),
+				},
+			})
 			require.Nil(t, err)
 
 			// Setup manager...

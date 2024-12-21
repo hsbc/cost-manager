@@ -14,18 +14,13 @@ e2e:
 image:
 	docker build -t $(IMAGE) .
 
-generate: deepcopy-gen
-	$(BIN_DIR)/deepcopy-gen \
-		--go-header-file ./hack/boilerplate.go.txt \
-		--input-dirs ./pkg/api/v1alpha1 \
-		--output-file-base zz_generated.deepcopy
+generate: controller-gen
+	$(BIN_DIR)/controller-gen object \
+		paths=./pkg/api/...
 
-verify: deepcopy-gen
-	$(BIN_DIR)/deepcopy-gen \
-		--go-header-file ./hack/boilerplate.go.txt \
-		--input-dirs ./pkg/api/v1alpha1 \
-		--output-file-base zz_generated.deepcopy \
-		--verify-only
+verify: generate
+	git diff --exit-code
 
-deepcopy-gen:
-	go build -o $(BIN_DIR)/deepcopy-gen k8s.io/code-generator/cmd/deepcopy-gen
+# https://book.kubebuilder.io/reference/controller-gen
+controller-gen:
+	ls $(BIN_DIR)/controller-gen || go build -o $(BIN_DIR)/controller-gen sigs.k8s.io/controller-tools/cmd/controller-gen

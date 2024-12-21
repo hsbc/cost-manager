@@ -4,7 +4,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 type CostManagerConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 	// TODO(dippynark): Support all generic controller fields:

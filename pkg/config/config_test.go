@@ -105,10 +105,10 @@ foo: bar
 		t.Run(name, func(t *testing.T) {
 			config, err := decode(test.configData)
 			if test.valid {
-				require.Nil(t, err)
+				require.NoError(t, err)
 				require.Equal(t, test.config, config)
 			} else {
-				require.NotNil(t, err)
+				require.Error(t, err)
 			}
 		})
 	}
@@ -140,9 +140,9 @@ func TestValidate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			err := validate(test.config)
 			if test.valid {
-				require.Nil(t, err)
+				require.NoError(t, err)
 			} else {
-				require.NotNil(t, err)
+				require.Error(t, err)
 			}
 		})
 	}

@@ -12,5 +12,5 @@ func TestWaitForNodeToBeDeletedWithMissingNode(t *testing.T) {
 	ctx := context.Background()
 	clientset := fake.NewSimpleClientset()
 	err := WaitForNodeToBeDeleted(ctx, clientset, "test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 }

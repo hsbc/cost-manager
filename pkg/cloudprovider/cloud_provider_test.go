@@ -9,5 +9,5 @@ import (
 
 func TestNewCloudProvider(t *testing.T) {
 	_, err := NewCloudProvider(context.Background(), "")
-	require.NotNil(t, err)
+	require.Error(t, err)
 }

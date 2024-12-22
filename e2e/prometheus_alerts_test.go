@@ -28,31 +28,31 @@ func TestPrometheusAlerts(t *testing.T) {
 	ctx := context.Background()
 
 	kubeClient, restConfig, err := kubernetes.NewClient()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Port forward to Prometheus and create client using local forwarded port
 	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	forwardedPort, stop, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		err := stop()
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}()
 	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
 	prometheusClient, err := api.NewClient(api.Config{
 		Address: prometheusAddress,
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
 
 	t.Log("Waiting for cost-manager alerts to be registered with Prometheus...")
 	costManagerPrometheusRule := &monitoringv1.PrometheusRule{}
 	err = kubeClient.Get(ctx, client.ObjectKey{Name: "cost-manager", Namespace: "cost-manager"}, costManagerPrometheusRule)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	for {
 		prometheusRules, err := prometheusAPI.Rules(ctx)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if prometheusHasAllCostManagerAlerts(costManagerPrometheusRule, prometheusRules) {
 			break
 		}
@@ -63,7 +63,7 @@ func TestPrometheusAlerts(t *testing.T) {
 	// Wait for Prometheus to scrape cost-manager
 	for {
 		results, _, err := prometheusAPI.Query(ctx, `up{job="cost-manager",namespace="cost-manager"}`, time.Now())
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if len(results.(model.Vector)) > 0 {
 			break
 		}
@@ -72,7 +72,7 @@ func TestPrometheusAlerts(t *testing.T) {
 
 	t.Logf("Ensuring all Prometheus alerts remain inactive for %s...", prometheusAlertsInactiveDuration)
 	err = waitForAllPrometheusAlertsToRemainInactive(ctx, prometheusAPI)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	t.Logf("All Prometheus alerts remained inactive for %s!", prometheusAlertsInactiveDuration)
 }
 

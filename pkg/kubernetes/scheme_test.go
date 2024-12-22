@@ -8,5 +8,5 @@ import (
 
 func TestNewScheme(t *testing.T) {
 	_, err := NewScheme()
-	require.Nil(t, err)
+	require.NoError(t, err)
 }

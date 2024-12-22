@@ -17,7 +17,7 @@ import (
 const (
 	podSafeToEvictAnnotatorControllerName = "pod-safe-to-evict-annotator"
 
-	// We copy the annotation key to avoid depending on the autoscaler respository:
+	// We copy the annotation key to avoid depending on the autoscaler repository:
 	// https://github.com/kubernetes/autoscaler/blob/389914758265a33e36683d6df7dbecf91de81802/cluster-autoscaler/utils/drain/drain.go#L33-L35
 	podSafeToEvictAnnotationKey = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 )

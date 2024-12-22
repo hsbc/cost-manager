@@ -90,7 +90,7 @@ func setup(ctx context.Context, image string) error {
 	}
 
 	// Install Prometheus Operator and Prometheus
-	err = installPrometheus(ctx, image)
+	err = installPrometheus()
 	if err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ podMonitor:
 	return kubernetes.WaitUntilDeploymentAvailable(ctx, kubeClient, "cost-manager", "cost-manager")
 }
 
-func installPrometheus(ctx context.Context, image string) (rerr error) {
+func installPrometheus() (rerr error) {
 	// Add prometheus-community Helm repository:
 	// https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack#get-helm-repository-info
 	err := runCommand("helm", "repo", "add", "prometheus-community", "https://prometheus-community.github.io/helm-charts")

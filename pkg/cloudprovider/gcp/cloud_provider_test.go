@@ -77,7 +77,7 @@ func TestIsSpotInstance(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cloudProvider := &CloudProvider{}
 			isSpotInstance, err := cloudProvider.IsSpotInstance(context.Background(), test.node)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.Equal(t, test.isSpotInstance, isSpotInstance)
 		})
 	}

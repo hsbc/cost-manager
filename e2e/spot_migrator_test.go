@@ -32,28 +32,28 @@ func TestSpotMigrator(t *testing.T) {
 	ctx := context.Background()
 
 	kubeClient, restConfig, err := kubernetes.NewClient()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Port forward to Prometheus and create client using local forwarded port
 	pod, err := kubernetes.WaitForAnyReadyPod(ctx, kubeClient, client.InNamespace("monitoring"), client.MatchingLabels{"app.kubernetes.io/name": "prometheus"})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	forwardedPort, stop, err := kubernetes.PortForward(ctx, restConfig, pod.Namespace, pod.Name, 9090)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		err := stop()
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}()
 	prometheusAddress := fmt.Sprintf("http://127.0.0.1:%d", forwardedPort)
 	prometheusClient, err := api.NewClient(api.Config{
 		Address: prometheusAddress,
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	prometheusAPI := prometheusv1.NewAPI(prometheusClient)
 
 	t.Log("Waiting for the failure metric to be scraped by Prometheus...")
 	for {
 		results, _, err := prometheusAPI.Query(ctx, `sum(cost_manager_spot_migrator_operation_failure_total{job="cost-manager",namespace="cost-manager"})`, time.Now())
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if len(results.(model.Vector)) == 1 {
 			break
 		}
@@ -75,21 +75,21 @@ func TestSpotMigrator(t *testing.T) {
 			},
 		},
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	nodeList := &corev1.NodeList{}
 	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: workerNodeSelector})
-	require.Nil(t, err)
-	require.Greater(t, len(nodeList.Items), 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, nodeList.Items)
 	nodeName := nodeList.Items[0].Name
 
 	// Deploy a workload to the worker Node
 	namespaceName := test.GenerateResourceName(t)
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
 	err = kubeClient.Create(ctx, namespace)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	deploymentName := namespaceName
 	deployment, err := test.GenerateDeployment(namespaceName, deploymentName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	deployment.Spec.Template.Spec.NodeSelector = map[string]string{"kubernetes.io/hostname": nodeName}
 	deployment.Spec.Template.Spec.Tolerations = []corev1.Toleration{
 		{
@@ -100,10 +100,10 @@ func TestSpotMigrator(t *testing.T) {
 		},
 	}
 	err = kubeClient.Create(ctx, deployment)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	t.Logf("Waiting for Deployment %s/%s to become available...", deployment.Namespace, deployment.Name)
 	err = kubernetes.WaitUntilDeploymentAvailable(ctx, kubeClient, namespaceName, deploymentName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	t.Logf("Deployment %s/%s is available!", deployment.Namespace, deployment.Name)
 
 	// Create PodDisruptionBudget...
@@ -121,7 +121,7 @@ func TestSpotMigrator(t *testing.T) {
 		},
 	}
 	err = kubeClient.Create(ctx, pdb)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// ...and wait until it's blocking eviction
 	pdbName := pdb.Name
 	listerWatcher := kubernetes.NewListerWatcher(ctx, kubeClient, &policyv1.PodDisruptionBudgetList{}, &client.ListOptions{Namespace: pdb.Namespace})
@@ -133,15 +133,15 @@ func TestSpotMigrator(t *testing.T) {
 		return pdb.Name == pdbName && pdb.Status.DisruptionsAllowed == 0 && pdb.Generation == pdb.Status.ObservedGeneration, nil
 	}
 	_, err = watch.UntilWithSync(ctx, listerWatcher, &policyv1.PodDisruptionBudget{}, nil, condition)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Label worker Node as an on-demand Node to give spot-migrator something to drain
 	node := &corev1.Node{}
 	err = kubeClient.Get(ctx, types.NamespacedName{Name: nodeName}, node)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"false"}}}`, cloudproviderfake.SpotInstanceLabelKey))
 	err = kubeClient.Patch(ctx, node, client.RawPatch(types.StrategicMergePatchType, patch))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Wait for the Node to be marked as unschedulable. This should not take any longer than 2
 	// minutes since spot-migrator is configured with a 1 minute migration interval
@@ -157,7 +157,7 @@ func TestSpotMigrator(t *testing.T) {
 		return node.Name == nodeName && node.Spec.Unschedulable, nil
 	}
 	_, err = watch.UntilWithSync(ctxWithTimeout, listerWatcher, &corev1.Node{}, nil, condition)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	t.Logf("Node %s marked as unschedulable!", nodeName)
 
 	// Make sure that the PodDisruptionBudget blocks eviction
@@ -170,11 +170,11 @@ func TestSpotMigrator(t *testing.T) {
 
 	// Delete PodDisruptionBudget...
 	err = kubeClient.Delete(ctx, pdb)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// ...and wait for the Deployment to become unavailable
 	t.Logf("Waiting for Deployment %s/%s to become unavailable...", deployment.Namespace, deployment.Name)
 	err = kubernetes.WaitUntilDeploymentUnavailable(ctx, kubeClient, namespaceName, deploymentName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	t.Logf("Deployment %s/%s is unavailable!", deployment.Namespace, deployment.Name)
 
 	// Delete Node; typically this would be done by the node controller but we simulate it here:
@@ -183,17 +183,17 @@ func TestSpotMigrator(t *testing.T) {
 	// or waiting for Node deletion are discovered due to the failure metric being incremented
 	time.Sleep(10 * time.Second)
 	err = kubeClient.Delete(ctx, node)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Delete Namespace
 	err = kubeClient.Delete(ctx, namespace)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Make sure that the failure metric was never incremented
 	results, _, err := prometheusAPI.Query(ctx, `sum(sum_over_time(cost_manager_spot_migrator_operation_failure_total{job="cost-manager",namespace="cost-manager"}[1h]))`, time.Now())
-	require.Nil(t, err)
-	require.Equal(t, 1, len(results.(model.Vector)))
-	require.True(t, results.(model.Vector)[0].Value == 0, "spot-migrator failure metric was incremented!")
+	require.NoError(t, err)
+	require.Len(t, results.(model.Vector), 1)
+	require.InDelta(t, 0, float64(results.(model.Vector)[0].Value), 0.5, "spot-migrator failure metric was incremented!")
 
 	// Finally, we verify that all control plane Nodes are still schedulable
 	controlPlaneNodeSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
@@ -204,11 +204,11 @@ func TestSpotMigrator(t *testing.T) {
 			},
 		},
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	nodeList = &corev1.NodeList{}
 	err = kubeClient.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: controlPlaneNodeSelector})
-	require.Nil(t, err)
-	require.Greater(t, len(nodeList.Items), 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, nodeList.Items)
 	for _, node := range nodeList.Items {
 		require.False(t, node.Spec.Unschedulable)
 	}

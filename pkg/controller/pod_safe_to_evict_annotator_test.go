@@ -145,7 +145,7 @@ func TestPodSafeToEvictAnnotatorReconcile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Create fake client
 			scheme, err := kubernetes.NewScheme()
-			require.Nil(t, err)
+			require.NoError(t, err)
 			objects := []client.Object{test.pod}
 			if test.namespace != nil {
 				objects = append(objects, test.namespace)
@@ -161,12 +161,12 @@ func TestPodSafeToEvictAnnotatorReconcile(t *testing.T) {
 			// Run reconciliation
 			ctx := context.Background()
 			_, err = podSafeToEvictAnnotator.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: test.pod.Name, Namespace: test.pod.Namespace}})
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			// Determine whether the Pod has been annotated
 			pod := &corev1.Pod{}
 			err = client.Get(ctx, types.NamespacedName{Name: test.pod.Name, Namespace: test.pod.Namespace}, pod)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			annotated := true
 			if pod.Annotations == nil {
 				annotated = false
